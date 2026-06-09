@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Threat Intel Hub</title>
+    <style>
+      :root { color-scheme: light; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      body { margin: 0; background: #f5f7fa; color: #17202a; }
+      header { background: #162033; color: #fff; padding: 20px 32px; }
+      main { max-width: 1120px; margin: 0 auto; padding: 24px; display: grid; gap: 18px; }
+      section { background: #fff; border: 1px solid #dde3ea; border-radius: 8px; padding: 18px; }
+      h1 { margin: 0; font-size: 24px; }
+      h2 { margin: 0 0 16px; font-size: 18px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+      label { display: grid; gap: 6px; font-size: 13px; color: #415064; }
+      input, select { height: 38px; border: 1px solid #cbd5df; border-radius: 6px; padding: 0 10px; font: inherit; }
+      input[type="checkbox"] { height: 18px; justify-self: start; }
+      .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+      button, a.button { border: 0; border-radius: 6px; background: #1f6feb; color: #fff; padding: 9px 13px; font: inherit; cursor: pointer; text-decoration: none; }
+      button.secondary, a.secondary { background: #586577; }
+      pre { white-space: pre-wrap; background: #101827; color: #d9e2f1; border-radius: 8px; padding: 12px; min-height: 48px; }
+    </style>
+  </head>
+  <body>
+    <header><h1>Threat Intel Hub</h1></header>
+    <main>
+      <section>
+        <h2>MISP 配置</h2>
+        <div class="grid">
+          <label>MISP URL <input id="misp_url" autocomplete="off"></label>
+          <label>MISP API Key <input id="misp_api_key" type="password" placeholder="******"></label>
+          <label>Verify Cert <input id="misp_verify_cert" type="checkbox"></label>
+          <label>Sync Interval Seconds <input id="misp_sync_interval_seconds" type="number" min="10"></label>
+        </div>
+        <div class="actions">
+          <button id="save">保存配置</button>
+          <button id="test-misp" class="secondary">测试 MISP</button>
+          <button id="sync-misp" class="secondary">手动同步</button>
+        </div>
+      </section>
+      <section>
+        <h2>ta_node 配置</h2>
+        <div class="grid">
+          <label>Enable Push <input id="ta_node_enabled" type="checkbox"></label>
+          <label>Base URL <input id="ta_node_base_url" autocomplete="off"></label>
+          <label>Token <input id="ta_node_token" type="password" placeholder="******"></label>
+          <label>Source Name <input id="ta_node_source_name"></label>
+          <label>Push Interval Seconds <input id="ta_node_push_interval_seconds" type="number" min="10"></label>
+        </div>
+        <div class="actions">
+          <button id="test-ta" class="secondary">测试 ta_node</button>
+          <button id="push-full" class="secondary">全量推送</button>
+          <button id="push-inc" class="secondary">增量推送</button>
+        </div>
+      </section>
+      <section>
+        <h2>状态与下载</h2>
+        <div class="actions">
+          <button id="push-status" class="secondary">推送状态</button>
+          <a class="button secondary" href="/downloads/latest">最新部署包</a>
+          <a class="button secondary" href="/downloads/traffic-ioc.txt">traffic-ioc.txt</a>
+          <a class="button secondary" href="/downloads/traffic-ioc.csv">traffic-ioc.csv</a>
+          <a class="button secondary" href="/downloads/traffic-ioc.json">traffic-ioc.json</a>
+        </div>
+        <pre id="output"></pre>
+      </section>
+    </main>
+    <script src="/static/config.js"></script>
+  </body>
+</html>

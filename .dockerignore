@@ -1,0 +1,10 @@
+.git
+.agents
+.codex
+.pytest_cache
+.venv
+__pycache__
+*.pyc
+*.db
+release
+docs/*.Zone.Identifier

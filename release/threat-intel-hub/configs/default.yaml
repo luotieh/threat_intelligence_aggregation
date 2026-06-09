@@ -1,0 +1,14 @@
+app:
+  host: 0.0.0.0
+  port: 18080
+misp:
+  url: https://misp.example.com
+  verify_cert: true
+  sync_interval_seconds: 600
+ta_node:
+  enabled: true
+  base_url: http://127.0.0.1:19090
+  source_name: Threat Intel Hub
+  push_interval_seconds: 600
+export:
+  dir: /app/release
