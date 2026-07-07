@@ -143,5 +143,14 @@ $("enrich-whoisxml").onclick = async () => {
     show(r);
   } catch (e) { st.textContent = "富化失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
 };
+$("sync-otx-now").onclick = async () => {
+  const st = $("sources_status");
+  st.textContent = "拉取 OTX 中(后台创建 MISP 事件)…";
+  try {
+    const r = await api("/sync/otx", { method: "POST" });
+    st.textContent = "OTX 拉取已在后台执行,约 1 分钟后点「手动同步」或等每日 Top 刷新";
+    show(r);
+  } catch (e) { st.textContent = "OTX 拉取失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
+};
 
 loadConfig().catch(show);

@@ -22,6 +22,8 @@ DEFAULTS: dict[str, str] = {
     "TA_NODE_TOP_PER_SOURCE": "10",
     "TA_NODE_MIN_SEVERITY": "high",
     "OTX_API_KEY": "",
+    "OTX_SYNC_INTERVAL_SECONDS": "86400",
+    "OTX_MAX_PULSES": "50",
     "WHOISXML_API_KEY": "",
     "WHOISXML_ENRICH_LIMIT": "10",
     "WHOISXML_ENRICH_INTERVAL_SECONDS": "86400",
@@ -59,6 +61,8 @@ class Settings:
     ta_node_top_per_source: int
     ta_node_min_severity: str
     otx_api_key: str
+    otx_sync_interval_seconds: int
+    otx_max_pulses: int
     whoisxml_api_key: str
     whoisxml_enrich_limit: int
     whoisxml_enrich_interval_seconds: int
@@ -94,6 +98,8 @@ def settings_from_values(db_values: dict[str, str] | None = None) -> Settings:
         ta_node_top_per_source=int(value_for("TA_NODE_TOP_PER_SOURCE", db_values)),
         ta_node_min_severity=value_for("TA_NODE_MIN_SEVERITY", db_values),
         otx_api_key=value_for("OTX_API_KEY", db_values),
+        otx_sync_interval_seconds=int(value_for("OTX_SYNC_INTERVAL_SECONDS", db_values)),
+        otx_max_pulses=int(value_for("OTX_MAX_PULSES", db_values)),
         whoisxml_api_key=value_for("WHOISXML_API_KEY", db_values),
         whoisxml_enrich_limit=int(value_for("WHOISXML_ENRICH_LIMIT", db_values)),
         whoisxml_enrich_interval_seconds=int(value_for("WHOISXML_ENRICH_INTERVAL_SECONDS", db_values)),

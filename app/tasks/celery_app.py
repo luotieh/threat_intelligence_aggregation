@@ -16,4 +16,8 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.enrich_whoisxml.enrich_whoisxml_task",
         "schedule": settings.whoisxml_enrich_interval_seconds,
     },
+    "sync-otx": {
+        "task": "app.tasks.sync_otx.sync_otx_task",
+        "schedule": settings.otx_sync_interval_seconds,
+    },
 }

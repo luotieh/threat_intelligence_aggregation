@@ -24,6 +24,8 @@ API_TO_ENV = {
     "ta_node_min_severity": "TA_NODE_MIN_SEVERITY",
     "whoisxml_enrich_limit": "WHOISXML_ENRICH_LIMIT",
     "whoisxml_enrich_interval_seconds": "WHOISXML_ENRICH_INTERVAL_SECONDS",
+    "otx_sync_interval_seconds": "OTX_SYNC_INTERVAL_SECONDS",
+    "otx_max_pulses": "OTX_MAX_PULSES",
 }
 
 
@@ -79,6 +81,8 @@ def public_config(db: Session) -> dict:
         "ta_node_min_severity": s.ta_node_min_severity,
         "whoisxml_enrich_limit": s.whoisxml_enrich_limit,
         "whoisxml_enrich_interval_seconds": s.whoisxml_enrich_interval_seconds,
+        "otx_sync_interval_seconds": s.otx_sync_interval_seconds,
+        "otx_max_pulses": s.otx_max_pulses,
         "defaults": {
             "misp_verify_cert": parse_bool(DEFAULTS["MISP_VERIFY_CERT"]),
             "ta_node_enabled": parse_bool(DEFAULTS["TA_NODE_ENABLED"]),

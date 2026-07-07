@@ -19,3 +19,5 @@ class ConfigPayload(BaseModel):
     ta_node_min_severity: str | None = None
     whoisxml_enrich_limit: int | None = Field(default=None, ge=0)
     whoisxml_enrich_interval_seconds: int | None = Field(default=None, ge=60)
+    otx_sync_interval_seconds: int | None = Field(default=None, ge=60)
+    otx_max_pulses: int | None = Field(default=None, ge=1)
