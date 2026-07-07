@@ -36,7 +36,7 @@ def test_enrich_narratives_generates_and_caches(db, make_indicator, monkeypatch)
     db.commit()
     calls = []
     monkeypatch.setattr(llm, "chat_completion",
-                        lambda *a, **k: calls.append(1) or "命中 Akira 勒索,建议阻断上报。")
+                        lambda *a, **k: calls.append(1) or "命中 Akira 勒索软件 C2 域名,建议立即阻断访问并上报应急。")
     result = enrich_narratives(db, limit=5)
     assert result["generated"] == 1
     db.refresh(ind)

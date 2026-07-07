@@ -57,7 +57,7 @@ def build_narrative(db: Session, evidence: dict, value: str) -> str:
             "请写 50-120 字的告警通告:威胁性质、判定依据、建议处置。只使用上面证据里的事实。")
     return chat_completion(s.llm_base_url, s.llm_api_key, s.llm_model,
                            [{"role": "system", "content": NARRATIVE_SYSTEM},
-                            {"role": "user", "content": user}], max_tokens=800)
+                            {"role": "user", "content": user}], max_tokens=1500)
 
 
 def generate_narrative(db: Session, indicator, retries: int = 3) -> str | None:
@@ -67,7 +67,8 @@ def generate_narrative(db: Session, indicator, retries: int = 3) -> str | None:
     for _ in range(max(1, retries)):
         try:
             text = build_narrative(db, build_evidence(indicator), value)
-            if text and text.strip():
+            # 太短(如推理模型只吐出"【"截断)视为失败,重试
+            if text and len(text.strip()) >= 20:
                 return text.strip()
         except Exception:  # noqa: BLE001 - 重试
             continue
