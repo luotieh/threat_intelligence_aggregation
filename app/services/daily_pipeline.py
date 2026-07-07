@@ -8,12 +8,9 @@ from sqlalchemy.orm import Session
 from app.models import IntelIndicator
 from app.services.config_service import get_effective_settings
 from app.services.enrichment import ENRICHED_TAG, query_whoisxml
-from app.services.llm import build_narrative
-from app.services.misp_client import sync_misp_attributes
-from app.services.otx_source import sync_otx_to_misp
+from app.services.otx_source import sync_otx_direct
 from app.services.ta_node_client import (
     _safe_rule_path,
-    build_evidence,
     map_indicator_to_ta_node_item,
     write_ta_node_ioc_files,
 )
@@ -72,10 +69,9 @@ def run_daily_pipeline(db: Session, target: int | None = None, max_enrich: int |
     confirmed: list[IntelIndicator] = []
     rounds = 0
 
-    # 先拉一批 OTX 并同步,保证当天有新的高危候选
+    # 先直连拉一批 OTX(去误报后入库),保证当天有新的高危候选
     try:
-        sync_otx_to_misp(db, max_pulses=s.otx_max_pulses)
-        sync_misp_attributes(db)
+        sync_otx_direct(db, max_pulses=s.otx_max_pulses)
         log["otx_pull_rounds"] = 1
     except Exception as exc:  # noqa: BLE001
         log["notes"].append(f"初始 OTX 拉取异常: {exc}")
@@ -84,8 +80,7 @@ def run_daily_pipeline(db: Session, target: int | None = None, max_enrich: int |
         rounds += 1
         cand = _unenriched_high_traffic(db)
         if not cand:
-            sync_otx_to_misp(db, max_pulses=s.otx_max_pulses)
-            sync_misp_attributes(db)
+            sync_otx_direct(db, max_pulses=s.otx_max_pulses)
             log["otx_pull_rounds"] += 1
             cand = _unenriched_high_traffic(db)
             if not cand:
@@ -108,17 +103,19 @@ def run_daily_pipeline(db: Session, target: int | None = None, max_enrich: int |
     if log["confirmed"] < target:
         log["notes"].append(f"达额度/候选上限,当日仅确认 {log['confirmed']}/{target} 条")
 
-    # LLM 描述(仅对确认的这批,保证每条有叙述)
+    # LLM 描述(仅对确认的这批,重试补齐,保证每条有叙述)
     if s.llm_enabled and s.llm_api_key:
+        from app.services.llm import generate_narrative
         for ind in confirmed[:target]:
             if not (ind.raw or {}).get("narrative"):
-                try:
-                    narrative = build_narrative(db, build_evidence(ind), ind.normalized_value or ind.value)
-                    ind.raw = {**(ind.raw or {}), "narrative": narrative}
+                text = generate_narrative(db, ind)
+                if text:
+                    ind.raw = {**(ind.raw or {}), "narrative": text}
                     log["narrated"] += 1
-                except Exception as exc:  # noqa: BLE001
-                    ind.raw = {**(ind.raw or {}), "narrative_error": str(exc)}
         db.commit()
+        missing = [i for i in confirmed[:target] if not (i.raw or {}).get("narrative")]
+        if missing:
+            log["notes"].append(f"{len(missing)} 条 LLM 描述重试后仍失败")
     else:
         log["notes"].append("LLM 未启用,跳过描述优化")
 

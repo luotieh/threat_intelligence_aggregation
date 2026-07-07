@@ -10,13 +10,8 @@ celery_app.conf.timezone = "Asia/Shanghai"
 celery_app.conf.enable_utc = False
 
 celery_app.conf.beat_schedule = {
-    # 常规:每 10 分钟把 MISP(feeds/OTX)增量同步进平台表
-    "sync-misp": {
-        "task": "app.tasks.sync_misp.sync_misp_task",
-        "schedule": settings.misp_sync_interval_seconds,
-    },
-    # 每日 23:00 编排:拉 OTX → WhoisXML 富化补足 → LLM 描述 → 推送
-    # (统一流程,取代独立的 sync-otx / enrich-whoisxml / push-ta-node 定时,避免重复烧额度与覆盖)
+    # 每日 23:00 编排:直连拉 OTX(去误报)→ WhoisXML 富化补足 → LLM 描述 → 推送
+    # OTX 已直连平台,不再需要 MISP 中转与 sync-misp 定时
     "daily-pipeline": {
         "task": "app.tasks.daily_pipeline.daily_pipeline_task",
         "schedule": crontab(hour=23, minute=0),

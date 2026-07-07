@@ -57,13 +57,26 @@ def build_narrative(db: Session, evidence: dict, value: str) -> str:
             "请写 50-120 字的告警通告:威胁性质、判定依据、建议处置。只使用上面证据里的事实。")
     return chat_completion(s.llm_base_url, s.llm_api_key, s.llm_model,
                            [{"role": "system", "content": NARRATIVE_SYSTEM},
-                            {"role": "user", "content": user}], max_tokens=300)
+                            {"role": "user", "content": user}], max_tokens=800)
+
+
+def generate_narrative(db: Session, indicator, retries: int = 3) -> str | None:
+    """对单个 indicator 生成 narrative,失败或返回空则重试;成功返回文本,否则 None。"""
+    from app.services.ta_node_client import build_evidence
+    value = indicator.normalized_value or indicator.value
+    for _ in range(max(1, retries)):
+        try:
+            text = build_narrative(db, build_evidence(indicator), value)
+            if text and text.strip():
+                return text.strip()
+        except Exception:  # noqa: BLE001 - 重试
+            continue
+    return None
 
 
 def enrich_narratives(db: Session, limit: int | None = None) -> dict:
-    """对 high 档证据用 LLM 生成告警叙述,存 raw.narrative;已生成的不重复。"""
+    """对 high 档证据生成告警叙述,存 raw.narrative;失败/空自动重试,已生成的不重复。"""
     from app.models import IntelIndicator
-    from app.services.ta_node_client import build_evidence
 
     s = get_effective_settings(db)
     if not s.llm_enabled:
@@ -77,12 +90,14 @@ def enrich_narratives(db: Session, limit: int | None = None) -> dict:
     todo = [c for c in candidates if not (c.raw or {}).get("narrative")][:limit]
     generated = failed = 0
     for ind in todo:
-        try:
-            narrative = build_narrative(db, build_evidence(ind), ind.normalized_value or ind.value)
-            ind.raw = {**(ind.raw or {}), "narrative": narrative}
+        text = generate_narrative(db, ind)
+        if text:
+            raw = {**(ind.raw or {}), "narrative": text}
+            raw.pop("narrative_error", None)
+            ind.raw = raw
             generated += 1
-        except Exception as exc:  # noqa: BLE001
-            ind.raw = {**(ind.raw or {}), "narrative_error": str(exc)}
+        else:
+            ind.raw = {**(ind.raw or {}), "narrative_error": "LLM 多次重试仍为空"}
             failed += 1
     db.commit()
     return {"status": "success", "queued": len(todo), "generated": generated, "failed": failed}

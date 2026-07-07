@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.db import SessionLocal, get_db
 from app.services.daily_pipeline import run_daily_pipeline
 from app.services.misp_client import sync_misp_attributes
-from app.services.otx_source import sync_otx_to_misp
+from app.services.otx_source import sync_otx_direct
 
 router = APIRouter()
 
@@ -26,7 +26,7 @@ def sync_misp(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
 def _otx_job() -> None:
     db = SessionLocal()
     try:
-        sync_otx_to_misp(db)
+        sync_otx_direct(db)
     finally:
         db.close()
 

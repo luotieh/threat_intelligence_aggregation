@@ -8,8 +8,7 @@ def test_pipeline_skipped_without_whoisxml_key(db):
 
 
 def _mute_io(monkeypatch):
-    monkeypatch.setattr(daily_pipeline, "sync_otx_to_misp", lambda db, max_pulses=None: None)
-    monkeypatch.setattr(daily_pipeline, "sync_misp_attributes", lambda db: None)
+    monkeypatch.setattr(daily_pipeline, "sync_otx_direct", lambda db, max_pulses=None: None)
 
 
 def test_pipeline_confirms_and_pushes(db, make_indicator, monkeypatch, tmp_path):

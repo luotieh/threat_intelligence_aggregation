@@ -1,39 +1,39 @@
-from app.models import AppConfig
+from app.models import AppConfig, IntelIndicator
 from app.services import otx_source
-from app.services.otx_source import pulse_to_event, sync_otx_to_misp
+from app.services.otx_source import pulse_to_attributes, sync_otx_direct
 
 
-def test_pulse_to_event_maps_and_tags():
+def test_pulse_to_attributes_maps_and_tags():
     pulse = {"id": "p1", "name": "Test", "tlp": "green", "tags": ["malware"],
              "indicators": [{"type": "IPv4", "indicator": "1.2.3.4"},
                             {"type": "UnknownX", "indicator": "x"}]}
-    event = pulse_to_event(pulse)
-    assert len(event["Attribute"]) == 1
-    assert event["Attribute"][0]["type"] == "ip-dst"
-    names = [t["name"] for t in event["Tag"]]
+    attrs = list(pulse_to_attributes(pulse))
+    assert len(attrs) == 1
+    assert attrs[0]["type"] == "ip-dst"
+    names = [t["name"] for t in attrs[0]["Tag"]]
     assert "source:otx" in names
     assert "tlp:green" in names
+    assert attrs[0]["Event"]["info"] == "OTX | Test"
 
 
 def test_sync_skipped_without_otx_key(db):
-    assert sync_otx_to_misp(db)["status"] == "skipped"
+    assert sync_otx_direct(db)["status"] == "skipped"
 
 
-def test_sync_creates_and_publishes_events(db, monkeypatch):
+def test_sync_direct_imports_and_filters_benign(db, monkeypatch):
     db.add(AppConfig(key="OTX_API_KEY", value="k"))
-    db.add(AppConfig(key="MISP_API_KEY", value="m"))
     db.commit()
-    pulses = [{"id": "p1", "name": "A", "indicators": [{"type": "domain", "indicator": "evil.com"}]}]
+    pulses = [{"id": "p1", "name": "A", "indicators": [
+        {"type": "domain", "indicator": "evil.com"},
+        {"type": "IPv4", "indicator": "10.0.0.5"},   # 私网 → 去误报
+        {"type": "IPv4", "indicator": "8.8.8.8"},     # 公共 DNS → 去误报
+    ]}]
     monkeypatch.setattr(otx_source, "fetch_pulses", lambda key, since, mx: iter(pulses))
-    posts = []
-
-    def fake_post(url, key, path, payload):
-        posts.append(path)
-        return {"Event": {"id": "99"}}
-
-    monkeypatch.setattr(otx_source, "_misp_post", fake_post)
-    result = sync_otx_to_misp(db)
+    result = sync_otx_direct(db)
     assert result["status"] == "success"
-    assert result["created"] == 1
-    assert any("/events/add" in p for p in posts)
-    assert any("/events/publish" in p for p in posts)
+    assert result["imported"] == 1
+    assert result["filtered_benign"] == 2
+    assert db.query(IntelIndicator).count() == 1
+    ind = db.query(IntelIndicator).first()
+    assert ind.value == "evil.com"
+    assert any(t.get("name") == "source:otx" for t in ind.tags)
