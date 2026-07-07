@@ -58,6 +58,7 @@ def _fetch_attributes(settings, timestamp: str) -> list[dict]:
         to_ids=True,
         enforceWarninglist=True,
         timestamp=timestamp,
+        include_context=True,
         pythonify=False,
     )
     if isinstance(result, dict):

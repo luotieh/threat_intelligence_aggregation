@@ -16,6 +16,12 @@ API_TO_ENV = {
     "ta_node_token": "TA_NODE_TOKEN",
     "ta_node_source_name": "TA_NODE_SOURCE_NAME",
     "ta_node_push_interval_seconds": "TA_NODE_PUSH_INTERVAL_SECONDS",
+    "ioc_output_dir": "IOC_OUTPUT_DIR",
+    "ioc_rule_filename": "IOC_RULE_FILENAME",
+    "otx_api_key": "OTX_API_KEY",
+    "whoisxml_api_key": "WHOISXML_API_KEY",
+    "ta_node_top_per_source": "TA_NODE_TOP_PER_SOURCE",
+    "ta_node_min_severity": "TA_NODE_MIN_SEVERITY",
 }
 
 
@@ -63,6 +69,12 @@ def public_config(db: Session) -> dict:
         "ta_node_token_masked": bool(s.ta_node_token),
         "ta_node_source_name": s.ta_node_source_name,
         "ta_node_push_interval_seconds": s.ta_node_push_interval_seconds,
+        "ioc_output_dir": s.ioc_output_dir,
+        "ioc_rule_filename": s.ioc_rule_filename,
+        "otx_api_key_masked": bool(s.otx_api_key),
+        "whoisxml_api_key_masked": bool(s.whoisxml_api_key),
+        "ta_node_top_per_source": s.ta_node_top_per_source,
+        "ta_node_min_severity": s.ta_node_min_severity,
         "defaults": {
             "misp_verify_cert": parse_bool(DEFAULTS["MISP_VERIFY_CERT"]),
             "ta_node_enabled": parse_bool(DEFAULTS["TA_NODE_ENABLED"]),

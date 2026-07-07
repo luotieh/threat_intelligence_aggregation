@@ -9,6 +9,12 @@ const fields = [
   "ta_node_token",
   "ta_node_source_name",
   "ta_node_push_interval_seconds",
+  "ioc_output_dir",
+  "ioc_rule_filename",
+  "otx_api_key",
+  "whoisxml_api_key",
+  "ta_node_top_per_source",
+  "ta_node_min_severity",
 ];
 
 function show(data) {
@@ -50,18 +56,63 @@ $("save").onclick = async () => show(await api("/api/config", {
   body: JSON.stringify(collectConfig()),
 }));
 $("test-misp").onclick = async () => show(await api("/health/misp"));
-$("test-ta").onclick = async () => show(await api("/health/ta-node"));
 $("sync-misp").onclick = async () => show(await api("/sync/misp", { method: "POST" }));
-$("push-full").onclick = async () => show(await api("/push/ta-node", {
+$("push-full").onclick = async () => show(await api("/ioc-rules/generate", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ mode: "full" }),
 }));
-$("push-inc").onclick = async () => show(await api("/push/ta-node", {
+$("push-inc").onclick = async () => show(await api("/ioc-rules/generate", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ mode: "incremental" }),
 }));
 $("push-status").onclick = async () => show(await api("/push/ta-node/status"));
+$("upload-ioc").onclick = async () => {
+  const file = $("ioc_upload_file").files[0];
+  if (!file) {
+    show("请选择 ta_node intel.yaml 或同名 zip 文件");
+    return;
+  }
+  const body = new FormData();
+  body.append("file", file);
+  show(await api("/ioc-rules/upload", { method: "POST", body }));
+};
+
+function renderTop(resp) {
+  const rows = [];
+  for (const src of resp.sources) {
+    for (const item of src.items) {
+      rows.push(`<tr><td>${src.source}</td><td>${item.value}</td><td>${item.misp_type}</td>` +
+        `<td>${item.severity ?? ""}</td><td>${item.confidence ?? ""}</td>` +
+        `<td>${item.last_seen ?? ""}</td></tr>`);
+    }
+  }
+  const summary = `generated_at=${resp.generated_at} · top_per_source=${resp.top_per_source}` +
+    ` · min_severity=${resp.min_severity} · 共 ${rows.length} 条`;
+  $("top_table").innerHTML = `<p>${summary}</p>` +
+    `<table class="top"><thead><tr><th>源</th><th>值</th><th>类型</th>` +
+    `<th>危险度</th><th>置信度</th><th>最近出现</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+}
+
+$("load-top").onclick = async () => {
+  const n = $("top_preview_n").value;
+  const sev = $("top_preview_sev").value;
+  try {
+    renderTop(await api(`/indicators/top?top_per_source=${n}&min_severity=${sev}`));
+  } catch (e) { show(e); }
+};
+
+$("save-sources").onclick = async () => {
+  await api("/api/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(collectConfig()),
+  });
+  await loadConfig();
+  show("情报源 Key 已保存(密文存储,回显为 masked)");
+};
+$("test-otx").onclick = async () => show(await api("/health/otx"));
+$("test-whoisxml").onclick = async () => show(await api("/health/whoisxml"));
 
 loadConfig().catch(show);

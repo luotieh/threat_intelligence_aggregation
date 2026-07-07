@@ -62,3 +62,86 @@ def test_health_ta_node_failed(db, monkeypatch):
 
     monkeypatch.setattr("app.api.health.httpx.Client", Client)
     assert health_ta_node(db)["status"] == "failed"
+
+
+def test_post_config_updates_top_per_source(db):
+    save_config(db, ConfigPayload(ta_node_top_per_source=5,
+                                  ta_node_min_severity="medium").model_dump(exclude_unset=True))
+    cfg = public_config(db)
+    assert cfg["ta_node_top_per_source"] == 5
+    assert cfg["ta_node_min_severity"] == "medium"
+
+
+def test_top_per_source_defaults_to_ten(db):
+    assert public_config(db)["ta_node_top_per_source"] == 10
+
+
+def test_otx_whoisxml_keys_masked(db):
+    db.add(AppConfig(key="OTX_API_KEY", value="secret-otx"))
+    db.commit()
+    cfg = public_config(db)
+    assert cfg["otx_api_key_masked"] is True
+    assert "secret-otx" not in str(cfg)
+
+
+def test_health_otx_unconfigured(db):
+    from app.api.health import health_otx
+    assert health_otx(db)["status"] == "unconfigured"
+
+
+def test_health_otx_success(db, monkeypatch):
+    from app.api.health import health_otx
+    db.add(AppConfig(key="OTX_API_KEY", value="k"))
+    db.commit()
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"username": "alice"}
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url, **kwargs):
+            return Response()
+
+    monkeypatch.setattr("app.api.health.httpx.Client", Client)
+    result = health_otx(db)
+    assert result["status"] == "ok"
+    assert result["username"] == "alice"
+
+
+def test_health_whoisxml_unconfigured(db):
+    from app.api.health import health_whoisxml
+    assert health_whoisxml(db)["status"] == "unconfigured"
+
+
+def test_health_whoisxml_failure_reports_error(db, monkeypatch):
+    from app.api.health import health_whoisxml
+    db.add(AppConfig(key="WHOISXML_API_KEY", value="k"))
+    db.commit()
+
+    class Client:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def get(self, url, **kwargs):
+            raise RuntimeError("boom")
+
+    monkeypatch.setattr("app.api.health.httpx.Client", Client)
+    assert health_whoisxml(db)["status"] == "failed"

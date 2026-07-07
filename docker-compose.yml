@@ -2,6 +2,11 @@ services:
   api:
     build: .
     env_file: .env
+    environment:
+      # 外部情报源健康检测经宿主机 socat 转发器出网(172.19.0.1 是本 compose 网络网关)
+      - "OUTBOUND_HTTPS_PROXY=http://host.docker.internal:17890"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "18080:18080"
     depends_on:
@@ -9,10 +14,13 @@ services:
       - redis
     volumes:
       - ./release:/app/release
+      - /data/ftp/ioc:/data/ftp/ioc
 
   worker:
     build: .
     env_file: .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: celery -A app.tasks.celery_app.celery_app worker --loglevel=info
     depends_on:
       - postgres
@@ -39,8 +47,10 @@ services:
 
   redis:
     image: redis:7-alpine
+    # 宿主机 6379 已被占用;内部服务经服务名 redis:6379 互联,
+    # 对外仅为调试映射到 6380。
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6380:6379"
 
 volumes:
   postgres_data:

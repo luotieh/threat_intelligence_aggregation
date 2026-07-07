@@ -19,11 +19,17 @@ DEFAULTS: dict[str, str] = {
     "TA_NODE_TOKEN": "",
     "TA_NODE_SOURCE_NAME": "Threat Intel Hub",
     "TA_NODE_PUSH_INTERVAL_SECONDS": "600",
+    "TA_NODE_TOP_PER_SOURCE": "10",
+    "TA_NODE_MIN_SEVERITY": "high",
+    "OTX_API_KEY": "",
+    "WHOISXML_API_KEY": "",
     "EXPORT_DIR": "release",
+    "IOC_OUTPUT_DIR": "/data/ftp/ioc",
+    "IOC_RULE_FILENAME": "intel.yaml",
 }
 
 ENV_KEYS = set(DEFAULTS)
-SECRET_KEYS = {"MISP_API_KEY", "TA_NODE_TOKEN"}
+SECRET_KEYS = {"MISP_API_KEY", "TA_NODE_TOKEN", "OTX_API_KEY", "WHOISXML_API_KEY"}
 
 
 def parse_bool(value: str | bool | None) -> bool:
@@ -48,7 +54,13 @@ class Settings:
     ta_node_token: str
     ta_node_source_name: str
     ta_node_push_interval_seconds: int
+    ta_node_top_per_source: int
+    ta_node_min_severity: str
+    otx_api_key: str
+    whoisxml_api_key: str
     export_dir: str
+    ioc_output_dir: str
+    ioc_rule_filename: str
 
 
 def value_for(key: str, db_values: dict[str, str] | None = None) -> str:
@@ -75,7 +87,13 @@ def settings_from_values(db_values: dict[str, str] | None = None) -> Settings:
         ta_node_token=value_for("TA_NODE_TOKEN", db_values),
         ta_node_source_name=value_for("TA_NODE_SOURCE_NAME", db_values),
         ta_node_push_interval_seconds=int(value_for("TA_NODE_PUSH_INTERVAL_SECONDS", db_values)),
+        ta_node_top_per_source=int(value_for("TA_NODE_TOP_PER_SOURCE", db_values)),
+        ta_node_min_severity=value_for("TA_NODE_MIN_SEVERITY", db_values),
+        otx_api_key=value_for("OTX_API_KEY", db_values),
+        whoisxml_api_key=value_for("WHOISXML_API_KEY", db_values),
         export_dir=value_for("EXPORT_DIR", db_values),
+        ioc_output_dir=value_for("IOC_OUTPUT_DIR", db_values),
+        ioc_rule_filename=value_for("IOC_RULE_FILENAME", db_values),
     )
 
 

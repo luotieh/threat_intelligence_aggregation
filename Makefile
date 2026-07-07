@@ -7,6 +7,7 @@ build:
 	docker compose build
 
 package:
+	rm -rf release/threat-intel-hub
 	mkdir -p release/threat-intel-hub
 	touch release/traffic-ioc.txt release/traffic-ioc.csv release/traffic-ioc.json
 	cp -r app alembic configs scripts release/threat-intel-hub/

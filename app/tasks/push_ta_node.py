@@ -1,5 +1,5 @@
 from app.db import SessionLocal
-from app.services.ta_node_client import push_traffic_to_ta_node
+from app.services.ta_node_client import generate_ta_node_ioc_package
 from app.tasks.celery_app import celery_app
 
 
@@ -7,6 +7,6 @@ from app.tasks.celery_app import celery_app
 def push_ta_node_task(mode: str = "incremental"):
     db = SessionLocal()
     try:
-        return push_traffic_to_ta_node(db, mode=mode)
+        return generate_ta_node_ioc_package(db, mode=mode)
     finally:
         db.close()

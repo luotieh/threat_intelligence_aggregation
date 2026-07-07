@@ -1,8 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from datetime import datetime, timezone
+
 from app.db import get_db
 from app.models import IntelIndicator
+from app.services.config_service import get_effective_settings
+from app.services.selection import SEVERITY_TIERS, select_top_per_source
 
 router = APIRouter()
 
@@ -19,6 +23,7 @@ def serialize(row: IntelIndicator) -> dict:
         "normalized_value": row.normalized_value,
         "to_ids": row.to_ids,
         "severity": row.severity,
+        "confidence": row.confidence,
         "tags": row.tags or [],
         "pushed_to_ta_node": row.pushed_to_ta_node,
         "push_error": row.push_error,
@@ -50,6 +55,30 @@ def list_indicators(
     if tag:
         rows = [row for row in rows if tag in " ".join(str(t) for t in (row.tags or []))]
     return {"items": [serialize(row) for row in rows], "limit": limit, "offset": offset}
+
+
+@router.get("/indicators/top")
+def top_indicators(
+    top_per_source: int | None = None,
+    min_severity: str | None = None,
+    db: Session = Depends(get_db),
+):
+    s = get_effective_settings(db)
+    top_n = s.ta_node_top_per_source if top_per_source is None else top_per_source
+    sev = s.ta_node_min_severity if min_severity is None else min_severity
+    if sev not in SEVERITY_TIERS:
+        raise HTTPException(status_code=422, detail="invalid min_severity")
+    groups = select_top_per_source(db, top_n, sev)
+    return {
+        "generated_at": int(datetime.now(timezone.utc).timestamp()),
+        "top_per_source": top_n,
+        "min_severity": sev,
+        "sources": [
+            {"source": g["source"], "count": len(g["items"]),
+             "items": [serialize(row) for row in g["items"]]}
+            for g in groups
+        ],
+    }
 
 
 @router.get("/indicators/{indicator_id}")

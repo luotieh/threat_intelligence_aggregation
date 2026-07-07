@@ -34,6 +34,9 @@ def upsert_indicator(db: Session, attribute: dict) -> IntelIndicator:
     indicator.confidence = _int_or_none(attribute.get("confidence"))
     indicator.threat_level = str(attribute.get("threat_level") or "") or None
     indicator.severity = severity_from_attribute(attribute)
+    event = attribute.get("Event") or {}
+    orgc = event.get("Orgc") or {}
+    indicator.source_org = orgc.get("name") or attribute.get("source_org") or None
     indicator.tags = attribute.get("Tag") or attribute.get("tags") or []
     indicator.galaxies = attribute.get("Galaxy") or attribute.get("galaxies") or []
     indicator.raw = attribute

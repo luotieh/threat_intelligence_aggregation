@@ -20,6 +20,10 @@
       button, a.button { border: 0; border-radius: 6px; background: #1f6feb; color: #fff; padding: 9px 13px; font: inherit; cursor: pointer; text-decoration: none; }
       button.secondary, a.secondary { background: #586577; }
       pre { white-space: pre-wrap; background: #101827; color: #d9e2f1; border-radius: 8px; padding: 12px; min-height: 48px; }
+      table.top { width: 100%; border-collapse: collapse; font-size: 13px; }
+      table.top th, table.top td { border: 1px solid #dde3ea; padding: 6px 8px; text-align: left; }
+      table.top th { background: #f0f3f7; }
+      .hint { font-size: 12px; color: #586577; margin: 8px 0 0; }
     </style>
   </head>
   <body>
@@ -40,19 +44,63 @@
         </div>
       </section>
       <section>
-        <h2>ta_node 配置</h2>
+        <h2>情报源 API Key</h2>
         <div class="grid">
-          <label>Enable Push <input id="ta_node_enabled" type="checkbox"></label>
-          <label>Base URL <input id="ta_node_base_url" autocomplete="off"></label>
-          <label>Token <input id="ta_node_token" type="password" placeholder="******"></label>
-          <label>Source Name <input id="ta_node_source_name"></label>
-          <label>Push Interval Seconds <input id="ta_node_push_interval_seconds" type="number" min="10"></label>
+          <label>OTX API Key <input id="otx_api_key" type="password" placeholder="******"></label>
+          <label>WhoisXML API Key <input id="whoisxml_api_key" type="password" placeholder="******"></label>
         </div>
         <div class="actions">
-          <button id="test-ta" class="secondary">测试 ta_node</button>
-          <button id="push-full" class="secondary">全量推送</button>
-          <button id="push-inc" class="secondary">增量推送</button>
+          <button id="save-sources">保存情报源 Key</button>
+          <button id="test-otx" class="secondary">测试 OTX</button>
+          <button id="test-whoisxml" class="secondary">测试 WhoisXML</button>
         </div>
+        <p class="hint">Key 密文保存后由 OTX / WhoisXML 同步脚本(scripts/*.py)读取导入 MISP,再由本平台聚合精选。测试按钮经宿主机代理验证 Key 连通性。</p>
+      </section>
+      <section>
+        <h2>ta_node 规则文件</h2>
+        <div class="grid">
+          <label>Enable Generate <input id="ta_node_enabled" type="checkbox"></label>
+          <label>Source Name <input id="ta_node_source_name"></label>
+          <label>Generate Interval Seconds <input id="ta_node_push_interval_seconds" type="number" min="10"></label>
+          <label>每源条数 (0=不限) <input id="ta_node_top_per_source" type="number" min="0"></label>
+          <label>最低危险度
+            <select id="ta_node_min_severity">
+              <option value="high">high</option>
+              <option value="medium">medium</option>
+              <option value="low">low</option>
+            </select>
+          </label>
+          <label>Output Directory <input id="ioc_output_dir" autocomplete="off"></label>
+          <label>Rule Filename <input id="ioc_rule_filename" autocomplete="off"></label>
+        </div>
+        <div class="actions">
+          <button id="push-full" class="secondary">生成全量规则包</button>
+          <button id="push-inc" class="secondary">生成增量规则包</button>
+        </div>
+      </section>
+      <section>
+        <h2>手动上传规则文件</h2>
+        <div class="grid">
+          <label>ta_node intel.yaml / zip <input id="ioc_upload_file" type="file" accept=".yaml,.yml,.zip,application/zip,text/yaml,text/plain"></label>
+        </div>
+        <div class="actions">
+          <button id="upload-ioc" class="secondary">上传到网闸目录</button>
+        </div>
+      </section>
+      <section>
+        <h2>每日 Top 高危流量情报</h2>
+        <div class="grid">
+          <label>预览每源条数 <input id="top_preview_n" type="number" min="0" value="10"></label>
+          <label>预览最低危险度
+            <select id="top_preview_sev">
+              <option value="high">high</option>
+              <option value="medium">medium</option>
+              <option value="low">low</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions"><button id="load-top" class="secondary">刷新 Top 列表</button></div>
+        <div id="top_table" style="overflow-x:auto"></div>
       </section>
       <section>
         <h2>状态与下载</h2>
