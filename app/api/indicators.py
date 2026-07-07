@@ -41,6 +41,7 @@ def serialize(row: IntelIndicator) -> dict:
         "push_error": row.push_error,
         "last_seen": row.last_seen.isoformat() if row.last_seen else None,
         "whoisxml": _whoisxml_summary(row.raw),
+        "narrative": (row.raw or {}).get("narrative"),
     }
 
 
