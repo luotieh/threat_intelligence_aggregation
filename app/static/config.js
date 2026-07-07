@@ -83,16 +83,19 @@ function renderTop(resp) {
   const rows = [];
   for (const src of resp.sources) {
     for (const item of src.items) {
+      const wx = item.whoisxml
+        ? (item.whoisxml.threat_type ? `✔ ${item.whoisxml.threat_type}` : "已查·无记录")
+        : "—";
       rows.push(`<tr><td>${src.source}</td><td>${item.value}</td><td>${item.misp_type}</td>` +
         `<td>${item.severity ?? ""}</td><td>${item.confidence ?? ""}</td>` +
-        `<td>${item.last_seen ?? ""}</td></tr>`);
+        `<td>${wx}</td><td>${item.last_seen ?? ""}</td></tr>`);
     }
   }
   const summary = `generated_at=${resp.generated_at} · top_per_source=${resp.top_per_source}` +
     ` · min_severity=${resp.min_severity} · 共 ${rows.length} 条`;
   $("top_table").innerHTML = `<p>${summary}</p>` +
     `<table class="top"><thead><tr><th>源</th><th>值</th><th>类型</th>` +
-    `<th>危险度</th><th>置信度</th><th>最近出现</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+    `<th>危险度</th><th>置信度</th><th>WhoisXML</th><th>最近出现</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
 }
 
 $("load-top").onclick = async () => {

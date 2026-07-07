@@ -11,6 +11,18 @@ from app.services.selection import SEVERITY_TIERS, select_top_per_source
 router = APIRouter()
 
 
+def _whoisxml_summary(raw: dict | None) -> dict | None:
+    wx = (raw or {}).get("whoisxml")
+    if not isinstance(wx, dict):
+        return None
+    results = wx.get("results") or []
+    if not results:
+        return {"checked": True, "threat_type": None}
+    top = results[0]
+    return {"checked": True, "threat_type": top.get("threatType"),
+            "first_seen": top.get("firstSeen"), "last_seen": top.get("lastSeen")}
+
+
 def serialize(row: IntelIndicator) -> dict:
     return {
         "id": row.id,
@@ -28,6 +40,7 @@ def serialize(row: IntelIndicator) -> dict:
         "pushed_to_ta_node": row.pushed_to_ta_node,
         "push_error": row.push_error,
         "last_seen": row.last_seen.isoformat() if row.last_seen else None,
+        "whoisxml": _whoisxml_summary(row.raw),
     }
 
 

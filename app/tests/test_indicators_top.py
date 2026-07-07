@@ -29,3 +29,14 @@ def test_top_uses_config_defaults_when_omitted(db, make_indicator):
     resp = top_indicators(top_per_source=None, min_severity=None, db=db)
     assert resp["top_per_source"] == 10
     assert resp["min_severity"] == "high"
+
+
+def test_top_includes_whoisxml_summary(db, make_indicator):
+    db.add(make_indicator(value="e.com", normalized_value="e.com", confidence=90,
+                          tags=[{"name": "source:otx"}],
+                          raw={"whoisxml": {"results": [{"threatType": "malware",
+                                                         "firstSeen": "2025-01-01", "lastSeen": "2026-01-01"}]}}))
+    db.commit()
+    item = top_indicators(top_per_source=10, min_severity="high", db=db)["sources"][0]["items"][0]
+    assert item["whoisxml"]["threat_type"] == "malware"
+    assert item["whoisxml"]["last_seen"] == "2026-01-01"
