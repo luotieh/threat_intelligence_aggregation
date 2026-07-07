@@ -104,15 +104,44 @@ $("load-top").onclick = async () => {
 };
 
 $("save-sources").onclick = async () => {
-  await api("/api/config", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(collectConfig()),
-  });
-  await loadConfig();
-  show("情报源 Key 已保存(密文存储,回显为 masked)");
+  const st = $("sources_status");
+  st.textContent = "保存中…";
+  try {
+    await api("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(collectConfig()),
+    });
+    await loadConfig();
+    st.textContent = "✓ 情报源 Key 已保存(密文存储,回显为 masked)";
+    show("情报源 Key 已保存");
+  } catch (e) {
+    st.textContent = "✗ 保存失败: " + (typeof e === "string" ? e : JSON.stringify(e));
+    show(e);
+  }
 };
-$("test-otx").onclick = async () => show(await api("/health/otx"));
-$("test-whoisxml").onclick = async () => show(await api("/health/whoisxml"));
+async function runHealth(name, path) {
+  const st = $("sources_status");
+  st.textContent = `测试 ${name} 中…`;
+  try {
+    const r = await api(path);
+    st.textContent = `${name}: ${r.status}` + (r.error ? ` — ${r.error}` : "") + (r.username ? ` (${r.username})` : "");
+    show(r);
+  } catch (e) {
+    st.textContent = `${name} 测试失败: ` + (typeof e === "string" ? e : JSON.stringify(e));
+    show(e);
+  }
+}
+$("test-otx").onclick = () => runHealth("OTX", "/health/otx");
+$("test-whoisxml").onclick = () => runHealth("WhoisXML", "/health/whoisxml");
+$("enrich-whoisxml").onclick = async () => {
+  const st = $("sources_status");
+  st.textContent = "富化中(查询 WhoisXML,约 10 次)…";
+  try {
+    const r = await api("/enrich/whoisxml", { method: "POST" });
+    st.textContent = `富化完成: ${r.enriched ?? 0} 条(确认恶意 ${r.confirmed_malicious ?? 0}, 失败 ${r.failed ?? 0})`;
+    show(r);
+  } catch (e) { st.textContent = "富化失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
+};
 
 loadConfig().catch(show);

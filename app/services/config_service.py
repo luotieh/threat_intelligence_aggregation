@@ -22,6 +22,8 @@ API_TO_ENV = {
     "whoisxml_api_key": "WHOISXML_API_KEY",
     "ta_node_top_per_source": "TA_NODE_TOP_PER_SOURCE",
     "ta_node_min_severity": "TA_NODE_MIN_SEVERITY",
+    "whoisxml_enrich_limit": "WHOISXML_ENRICH_LIMIT",
+    "whoisxml_enrich_interval_seconds": "WHOISXML_ENRICH_INTERVAL_SECONDS",
 }
 
 
@@ -75,6 +77,8 @@ def public_config(db: Session) -> dict:
         "whoisxml_api_key_masked": bool(s.whoisxml_api_key),
         "ta_node_top_per_source": s.ta_node_top_per_source,
         "ta_node_min_severity": s.ta_node_min_severity,
+        "whoisxml_enrich_limit": s.whoisxml_enrich_limit,
+        "whoisxml_enrich_interval_seconds": s.whoisxml_enrich_interval_seconds,
         "defaults": {
             "misp_verify_cert": parse_bool(DEFAULTS["MISP_VERIFY_CERT"]),
             "ta_node_enabled": parse_bool(DEFAULTS["TA_NODE_ENABLED"]),

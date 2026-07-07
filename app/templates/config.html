@@ -53,7 +53,9 @@
           <button id="save-sources">保存情报源 Key</button>
           <button id="test-otx" class="secondary">测试 OTX</button>
           <button id="test-whoisxml" class="secondary">测试 WhoisXML</button>
+          <button id="enrich-whoisxml" class="secondary">立即富化 high 档</button>
         </div>
+        <div id="sources_status" class="hint"></div>
         <p class="hint">Key 密文保存后由 OTX / WhoisXML 同步脚本(scripts/*.py)读取导入 MISP,再由本平台聚合精选。测试按钮经宿主机代理验证 Key 连通性。</p>
       </section>
       <section>
@@ -114,6 +116,6 @@
         <pre id="output"></pre>
       </section>
     </main>
-    <script src="/static/config.js"></script>
+    <script src="/static/config.js?v=20260707c"></script>
   </body>
 </html>

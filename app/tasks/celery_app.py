@@ -12,4 +12,8 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.push_ta_node.push_ta_node_task",
         "schedule": settings.ta_node_push_interval_seconds,
     },
+    "enrich-whoisxml": {
+        "task": "app.tasks.enrich_whoisxml.enrich_whoisxml_task",
+        "schedule": settings.whoisxml_enrich_interval_seconds,
+    },
 }

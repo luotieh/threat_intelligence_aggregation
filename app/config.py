@@ -23,6 +23,8 @@ DEFAULTS: dict[str, str] = {
     "TA_NODE_MIN_SEVERITY": "high",
     "OTX_API_KEY": "",
     "WHOISXML_API_KEY": "",
+    "WHOISXML_ENRICH_LIMIT": "10",
+    "WHOISXML_ENRICH_INTERVAL_SECONDS": "86400",
     "EXPORT_DIR": "release",
     "IOC_OUTPUT_DIR": "/data/ftp/ioc",
     "IOC_RULE_FILENAME": "intel.yaml",
@@ -58,6 +60,8 @@ class Settings:
     ta_node_min_severity: str
     otx_api_key: str
     whoisxml_api_key: str
+    whoisxml_enrich_limit: int
+    whoisxml_enrich_interval_seconds: int
     export_dir: str
     ioc_output_dir: str
     ioc_rule_filename: str
@@ -91,6 +95,8 @@ def settings_from_values(db_values: dict[str, str] | None = None) -> Settings:
         ta_node_min_severity=value_for("TA_NODE_MIN_SEVERITY", db_values),
         otx_api_key=value_for("OTX_API_KEY", db_values),
         whoisxml_api_key=value_for("WHOISXML_API_KEY", db_values),
+        whoisxml_enrich_limit=int(value_for("WHOISXML_ENRICH_LIMIT", db_values)),
+        whoisxml_enrich_interval_seconds=int(value_for("WHOISXML_ENRICH_INTERVAL_SECONDS", db_values)),
         export_dir=value_for("EXPORT_DIR", db_values),
         ioc_output_dir=value_for("IOC_OUTPUT_DIR", db_values),
         ioc_rule_filename=value_for("IOC_RULE_FILENAME", db_values),

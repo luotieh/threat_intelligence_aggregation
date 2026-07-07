@@ -30,14 +30,18 @@ def upsert_indicator(db: Session, attribute: dict) -> IntelIndicator:
     indicator.normalized_type = normalized_type
     indicator.normalized_value = normalized_value
     indicator.to_ids = bool(attribute.get("to_ids", False))
-    indicator.tlp = extract_tlp(attribute.get("Tag") or attribute.get("tags") or [])
+    # feed/pulse 的 source 与威胁标签常打在事件级,需合并到属性级才能被识别
+    attr_tags = attribute.get("Tag") or attribute.get("tags") or []
+    event = attribute.get("Event") or {}
+    event_tags = event.get("Tag") or []
+    merged_tags = list(attr_tags) + [t for t in event_tags if t not in attr_tags]
+    indicator.tlp = extract_tlp(merged_tags)
     indicator.confidence = _int_or_none(attribute.get("confidence"))
     indicator.threat_level = str(attribute.get("threat_level") or "") or None
-    indicator.severity = severity_from_attribute(attribute)
-    event = attribute.get("Event") or {}
+    indicator.severity = severity_from_attribute({**attribute, "Tag": merged_tags})
     orgc = event.get("Orgc") or {}
     indicator.source_org = orgc.get("name") or attribute.get("source_org") or None
-    indicator.tags = attribute.get("Tag") or attribute.get("tags") or []
+    indicator.tags = merged_tags
     indicator.galaxies = attribute.get("Galaxy") or attribute.get("galaxies") or []
     indicator.raw = attribute
     indicator.last_seen = datetime.now(timezone.utc)
@@ -54,18 +58,22 @@ def extract_tlp(tags: list) -> str | None:
 
 def severity_from_attribute(attribute: dict) -> str:
     tags = " ".join((tag.get("name") if isinstance(tag, dict) else str(tag)).lower() for tag in attribute.get("Tag", []) or attribute.get("tags", []) or [])
-    if any(word in tags for word in ("critical", "high", "apt", "malware", "c2")):
-        return "high"
     confidence = _int_or_none(attribute.get("confidence"))
-    if confidence is not None:
-        if confidence >= 80:
-            return "high"
-        if confidence < 40:
-            return "low"
     threat_level = str(attribute.get("threat_level") or "").lower()
-    if threat_level in {"1", "high"}:
+    # 真正高危:定向/国家级/勒索/C2/关键
+    high_words = ("critical", "apt", "ransomware", "c2", "command-and-control",
+                  "targeted", "nation-state", "wiper", "cobalt", "threat-actor")
+    if (any(w in tags for w in high_words) or threat_level in {"1", "high"}
+            or (confidence is not None and confidence >= 90)):
         return "high"
-    if threat_level in {"3", "low"}:
+    # 一般威胁(含 OTX 一般情报)-> medium
+    medium_words = ("malware", "phishing", "stealer", "trojan", "rat", "loader",
+                    "botnet", "backdoor", "exploit", "worm", "spyware", "source:otx")
+    if (any(w in tags for w in medium_words) or threat_level in {"2", "medium"}
+            or (confidence is not None and confidence >= 50)):
+        return "medium"
+    if (threat_level in {"3", "low"} or "tlp:white" in tags
+            or (confidence is not None and confidence < 30)):
         return "low"
     return "medium"
 
