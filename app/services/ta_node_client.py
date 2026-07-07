@@ -63,6 +63,7 @@ def build_evidence(indicator: IntelIndicator) -> dict:
         "confidence": f"{indicator.severity or 'medium'} ({n_sources} source{'s' if n_sources > 1 else ''})",
         "tlp": indicator.tlp,
         "misp_event_id": event.get("id") or indicator.misp_event_id,
+        "narrative": raw.get("narrative"),
     }
 
 

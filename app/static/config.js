@@ -15,6 +15,10 @@ const fields = [
   "whoisxml_api_key",
   "ta_node_top_per_source",
   "ta_node_min_severity",
+  "llm_enabled",
+  "llm_base_url",
+  "llm_api_key",
+  "llm_model",
 ];
 
 function show(data) {
@@ -154,6 +158,34 @@ $("sync-otx-now").onclick = async () => {
     st.textContent = "OTX 拉取已在后台执行,约 1 分钟后点「手动同步」或等每日 Top 刷新";
     show(r);
   } catch (e) { st.textContent = "OTX 拉取失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
+};
+$("save-llm").onclick = async () => {
+  const st = $("llm_status");
+  st.textContent = "保存中…";
+  try {
+    await api("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(collectConfig()) });
+    await loadConfig();
+    st.textContent = "✓ LLM 配置已保存(Key 密文,回显 masked)";
+    show("LLM 配置已保存");
+  } catch (e) { st.textContent = "✗ 保存失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
+};
+$("test-llm").onclick = async () => {
+  const st = $("llm_status");
+  st.textContent = "测试 LLM 中…";
+  try {
+    const r = await api("/health/llm");
+    st.textContent = `LLM: ${r.status}` + (r.model ? ` · ${r.model}` : "") + (r.reply ? ` · 回复"${r.reply}"` : "") + (r.error ? ` · ${r.error}` : "") + (r.reason ? ` · ${r.reason}` : "");
+    show(r);
+  } catch (e) { st.textContent = "测试失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
+};
+$("gen-narrative").onclick = async () => {
+  const st = $("llm_status");
+  st.textContent = "生成告警叙述中(调用 LLM)…";
+  try {
+    const r = await api("/enrich/narrative", { method: "POST" });
+    st.textContent = `叙述生成: ${r.generated ?? 0} 条(失败 ${r.failed ?? 0})` + (r.reason ? ` — ${r.reason}` : "") + (r.error ? ` — ${r.error}` : "");
+    show(r);
+  } catch (e) { st.textContent = "生成失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
 };
 
 loadConfig().catch(show);

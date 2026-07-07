@@ -21,3 +21,7 @@ class ConfigPayload(BaseModel):
     whoisxml_enrich_interval_seconds: int | None = Field(default=None, ge=60)
     otx_sync_interval_seconds: int | None = Field(default=None, ge=60)
     otx_max_pulses: int | None = Field(default=None, ge=1)
+    llm_enabled: bool | None = None
+    llm_base_url: str | None = None
+    llm_api_key: str | None = None
+    llm_model: str | None = None

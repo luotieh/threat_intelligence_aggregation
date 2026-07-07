@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.services.config_service import get_effective_settings
+from app.services.llm import llm_health
 from app.services.misp_client import check_misp_health
 
 import httpx
@@ -71,3 +72,8 @@ def health_whoisxml(db: Session = Depends(get_db)):
         return {"status": "ok"}
     except Exception as exc:
         return {"status": "failed", "error": str(exc)}
+
+
+@router.get("/health/llm")
+def health_llm(db: Session = Depends(get_db)):
+    return llm_health(db)

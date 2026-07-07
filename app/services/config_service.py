@@ -26,6 +26,10 @@ API_TO_ENV = {
     "whoisxml_enrich_interval_seconds": "WHOISXML_ENRICH_INTERVAL_SECONDS",
     "otx_sync_interval_seconds": "OTX_SYNC_INTERVAL_SECONDS",
     "otx_max_pulses": "OTX_MAX_PULSES",
+    "llm_enabled": "LLM_ENABLED",
+    "llm_base_url": "LLM_BASE_URL",
+    "llm_api_key": "LLM_API_KEY",
+    "llm_model": "LLM_MODEL",
 }
 
 
@@ -83,6 +87,10 @@ def public_config(db: Session) -> dict:
         "whoisxml_enrich_interval_seconds": s.whoisxml_enrich_interval_seconds,
         "otx_sync_interval_seconds": s.otx_sync_interval_seconds,
         "otx_max_pulses": s.otx_max_pulses,
+        "llm_enabled": s.llm_enabled,
+        "llm_base_url": s.llm_base_url,
+        "llm_model": s.llm_model,
+        "llm_api_key_masked": bool(s.llm_api_key),
         "defaults": {
             "misp_verify_cert": parse_bool(DEFAULTS["MISP_VERIFY_CERT"]),
             "ta_node_enabled": parse_bool(DEFAULTS["TA_NODE_ENABLED"]),

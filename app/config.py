@@ -27,13 +27,17 @@ DEFAULTS: dict[str, str] = {
     "WHOISXML_API_KEY": "",
     "WHOISXML_ENRICH_LIMIT": "10",
     "WHOISXML_ENRICH_INTERVAL_SECONDS": "86400",
+    "LLM_ENABLED": "false",
+    "LLM_BASE_URL": "https://api.openai.com/v1",
+    "LLM_API_KEY": "",
+    "LLM_MODEL": "gpt-4o-mini",
     "EXPORT_DIR": "release",
     "IOC_OUTPUT_DIR": "/data/ftp/ioc",
     "IOC_RULE_FILENAME": "intel.yaml",
 }
 
 ENV_KEYS = set(DEFAULTS)
-SECRET_KEYS = {"MISP_API_KEY", "TA_NODE_TOKEN", "OTX_API_KEY", "WHOISXML_API_KEY"}
+SECRET_KEYS = {"MISP_API_KEY", "TA_NODE_TOKEN", "OTX_API_KEY", "WHOISXML_API_KEY", "LLM_API_KEY"}
 
 
 def parse_bool(value: str | bool | None) -> bool:
@@ -66,6 +70,10 @@ class Settings:
     whoisxml_api_key: str
     whoisxml_enrich_limit: int
     whoisxml_enrich_interval_seconds: int
+    llm_enabled: bool
+    llm_base_url: str
+    llm_api_key: str
+    llm_model: str
     export_dir: str
     ioc_output_dir: str
     ioc_rule_filename: str
@@ -103,6 +111,10 @@ def settings_from_values(db_values: dict[str, str] | None = None) -> Settings:
         whoisxml_api_key=value_for("WHOISXML_API_KEY", db_values),
         whoisxml_enrich_limit=int(value_for("WHOISXML_ENRICH_LIMIT", db_values)),
         whoisxml_enrich_interval_seconds=int(value_for("WHOISXML_ENRICH_INTERVAL_SECONDS", db_values)),
+        llm_enabled=parse_bool(value_for("LLM_ENABLED", db_values)),
+        llm_base_url=value_for("LLM_BASE_URL", db_values).rstrip("/"),
+        llm_api_key=value_for("LLM_API_KEY", db_values),
+        llm_model=value_for("LLM_MODEL", db_values),
         export_dir=value_for("EXPORT_DIR", db_values),
         ioc_output_dir=value_for("IOC_OUTPUT_DIR", db_values),
         ioc_rule_filename=value_for("IOC_RULE_FILENAME", db_values),

@@ -60,6 +60,22 @@
         <p class="hint">Key 密文保存后由 OTX / WhoisXML 同步脚本(scripts/*.py)读取导入 MISP,再由本平台聚合精选。测试按钮经宿主机代理验证 Key 连通性。</p>
       </section>
       <section>
+        <h2>LLM 证据润色(可选)</h2>
+        <div class="grid">
+          <label>启用 LLM <input id="llm_enabled" type="checkbox"></label>
+          <label>Base URL <input id="llm_base_url" autocomplete="off" placeholder="https://api.openai.com/v1"></label>
+          <label>API Key <input id="llm_api_key" type="password" placeholder="******"></label>
+          <label>Model <input id="llm_model" autocomplete="off" placeholder="gpt-4o-mini"></label>
+        </div>
+        <div class="actions">
+          <button id="save-llm">保存 LLM 配置</button>
+          <button id="test-llm" class="secondary">测试 LLM</button>
+          <button id="gen-narrative" class="secondary">生成告警叙述(high 档)</button>
+        </div>
+        <div id="llm_status" class="hint"></div>
+        <p class="hint">OpenAI 兼容接口,只把结构化证据润色成自然语言、不产生新事实。OpenAI 用 https://api.openai.com/v1;DeepSeek 用 https://api.deepseek.com/v1;本地 Ollama 用 http://host.docker.internal:11434/v1。</p>
+      </section>
+      <section>
         <h2>ta_node 规则文件</h2>
         <div class="grid">
           <label>Enable Generate <input id="ta_node_enabled" type="checkbox"></label>
@@ -117,6 +133,6 @@
         <pre id="output"></pre>
       </section>
     </main>
-    <script src="/static/config.js?v=20260707e"></script>
+    <script src="/static/config.js?v=20260707f"></script>
   </body>
 </html>
