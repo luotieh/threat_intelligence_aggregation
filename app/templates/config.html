@@ -5,135 +5,339 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Threat Intel Hub</title>
     <style>
-      :root { color-scheme: light; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      body { margin: 0; background: #f5f7fa; color: #17202a; }
-      header { background: #162033; color: #fff; padding: 20px 32px; }
-      main { max-width: 1120px; margin: 0 auto; padding: 24px; display: grid; gap: 18px; }
-      section { background: #fff; border: 1px solid #dde3ea; border-radius: 8px; padding: 18px; }
-      h1 { margin: 0; font-size: 24px; }
-      h2 { margin: 0 0 16px; font-size: 18px; }
-      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
-      label { display: grid; gap: 6px; font-size: 13px; color: #415064; }
-      input, select { height: 38px; border: 1px solid #cbd5df; border-radius: 6px; padding: 0 10px; font: inherit; }
-      input[type="checkbox"] { height: 18px; justify-self: start; }
-      .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
-      button, a.button { border: 0; border-radius: 6px; background: #1f6feb; color: #fff; padding: 9px 13px; font: inherit; cursor: pointer; text-decoration: none; }
-      button.secondary, a.secondary { background: #586577; }
-      pre { white-space: pre-wrap; background: #101827; color: #d9e2f1; border-radius: 8px; padding: 12px; min-height: 48px; }
-      table.top { width: 100%; border-collapse: collapse; font-size: 13px; }
-      table.top th, table.top td { border: 1px solid #dde3ea; padding: 6px 8px; text-align: left; }
-      table.top th { background: #f0f3f7; }
-      table.top td.narr { max-width: 340px; white-space: normal; font-size: 12px; color: #33415c; }
-      .hint { font-size: 12px; color: #586577; margin: 8px 0 0; }
+      :root {
+        --bg: #f4f6fb; --surface: #ffffff; --surface-2: #f1f4f9; --sidebar: #12172200;
+        --border: #e4e8f0; --text: #161c2d; --text-dim: #6a7488; --text-faint: #98a1b3;
+        --accent: #4f46e5; --accent-soft: #eef0fe; --accent-hover: #4338ca;
+        --success: #15a34a; --success-soft: #e7f6ec; --danger: #dc2626; --danger-soft: #fdeaea;
+        --warn: #d97706; --warn-soft: #fdf1e3;
+        --radius: 12px; --radius-sm: 8px;
+        --shadow: 0 1px 2px rgba(20,30,60,.04), 0 4px 16px rgba(20,30,60,.05);
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+        color-scheme: light;
+      }
+      :root[data-theme="dark"], :root:not([data-theme="light"]) {
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #0c1018; --surface: #151b26; --surface-2: #1c2431; --border: #263041;
+          --text: #e8ecf4; --text-dim: #97a2b6; --text-faint: #6b7688;
+          --accent: #6366f1; --accent-soft: #21243a; --accent-hover: #7c7ff2;
+          --success: #34d399; --success-soft: #16261f; --danger: #f87171; --danger-soft: #2a1a1c;
+          --warn: #fbbf24; --warn-soft: #2a2116;
+          --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.28);
+          color-scheme: dark;
+        }
+      }
+      :root[data-theme="dark"] {
+        --bg: #0c1018; --surface: #151b26; --surface-2: #1c2431; --border: #263041;
+        --text: #e8ecf4; --text-dim: #97a2b6; --text-faint: #6b7688;
+        --accent: #6366f1; --accent-soft: #21243a; --accent-hover: #7c7ff2;
+        --success: #34d399; --success-soft: #16261f; --danger: #f87171; --danger-soft: #2a1a1c;
+        --warn: #fbbf24; --warn-soft: #2a2116;
+        --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.28);
+        color-scheme: dark;
+      }
+
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text);
+        font-family: "Inter", system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+      .app { display: grid; grid-template-columns: 244px 1fr; min-height: 100vh; }
+
+      /* Sidebar */
+      .sidebar { border-right: 1px solid var(--border); background: var(--surface);
+        display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+      .brand { display: flex; align-items: center; gap: 10px; padding: 20px 20px 16px;
+        font-weight: 700; font-size: 16px; letter-spacing: -.01em; }
+      .brand .logo { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+        background: linear-gradient(135deg, var(--accent), #8b5cf6); font-size: 16px; }
+      nav { display: flex; flex-direction: column; gap: 2px; padding: 8px 12px; flex: 1; }
+      .nav-item { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left;
+        padding: 9px 12px; border: 0; border-radius: var(--radius-sm); background: transparent;
+        color: var(--text-dim); font: inherit; font-weight: 500; cursor: pointer; transition: .12s; }
+      .nav-item:hover { background: var(--surface-2); color: var(--text); }
+      .nav-item.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+      .nav-item .ic { font-size: 16px; width: 18px; text-align: center; }
+      .sidebar-foot { padding: 14px 20px; border-top: 1px solid var(--border);
+        display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-faint); }
+      .theme-btn { border: 1px solid var(--border); background: var(--surface-2); color: var(--text-dim);
+        width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+
+      /* Content */
+      .content { min-width: 0; }
+      .topbar { display: flex; align-items: center; justify-content: space-between;
+        padding: 20px 32px; border-bottom: 1px solid var(--border); background: var(--surface);
+        position: sticky; top: 0; z-index: 5; }
+      .topbar h1 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -.01em; }
+      .topbar .sub { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
+      .wrap { padding: 24px 32px; max-width: 1180px; }
+
+      .panel { display: none; }
+      .panel.active { display: block; animation: fade .18s ease; }
+      @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+      /* Cards */
+      .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+        box-shadow: var(--shadow); padding: 20px; margin-bottom: 18px; }
+      .card h2 { margin: 0 0 4px; font-size: 15px; font-weight: 650; }
+      .card .desc { color: var(--text-dim); font-size: 12.5px; margin: 0 0 16px; }
+      .card-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+
+      /* Stat tiles */
+      .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 18px; }
+      .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+        box-shadow: var(--shadow); padding: 18px; }
+      .stat .k { color: var(--text-dim); font-size: 12.5px; font-weight: 500; display: flex; align-items: center; gap: 7px; }
+      .stat .v { font-size: 28px; font-weight: 700; letter-spacing: -.02em; margin-top: 8px; }
+      .stat .v small { font-size: 14px; font-weight: 500; color: var(--text-faint); }
+
+      /* Forms */
+      label { display: grid; gap: 6px; font-size: 12.5px; color: var(--text-dim); font-weight: 500; }
+      input, select { height: 40px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+        padding: 0 12px; font: inherit; background: var(--surface); color: var(--text); transition: .12s; width: 100%; }
+      input:focus, select:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+      input[type="checkbox"] { width: 20px; height: 20px; justify-self: start; accent-color: var(--accent); }
+      input[type="file"] { padding: 8px; height: auto; }
+      .switch { display: flex; align-items: center; gap: 10px; }
+
+      /* Buttons */
+      .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+      button.btn, a.btn { border: 1px solid transparent; border-radius: var(--radius-sm);
+        background: var(--accent); color: #fff; padding: 9px 15px; font: inherit; font-weight: 550;
+        cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 7px; transition: .12s; }
+      button.btn:hover, a.btn:hover { background: var(--accent-hover); }
+      button.ghost, a.ghost { background: var(--surface); color: var(--text-dim); border-color: var(--border); }
+      button.ghost:hover, a.ghost:hover { background: var(--surface-2); color: var(--text); }
+
+      /* Badges */
+      .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+        font-size: 12px; font-weight: 600; background: var(--surface-2); color: var(--text-dim); }
+      .badge.ok { background: var(--success-soft); color: var(--success); }
+      .badge.bad { background: var(--danger-soft); color: var(--danger); }
+      .badge.warn { background: var(--warn-soft); color: var(--warn); }
+      .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+      .health-row { display: flex; flex-wrap: wrap; gap: 10px; }
+      .health-item { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--border);
+        border-radius: var(--radius-sm); background: var(--surface-2); flex: 1; min-width: 180px; }
+      .health-item .name { font-weight: 600; font-size: 13px; }
+
+      /* status line */
+      .status { font-size: 12.5px; color: var(--text-dim); margin-top: 12px; min-height: 18px; }
+      .status.ok { color: var(--success); } .status.err { color: var(--danger); }
+
+      /* Table */
+      .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+      table { width: 100%; border-collapse: collapse; font-size: 13px; }
+      thead th { background: var(--surface-2); color: var(--text-dim); font-weight: 600; text-align: left;
+        padding: 11px 12px; white-space: nowrap; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+      tbody td { padding: 11px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+      tbody tr:last-child td { border-bottom: 0; }
+      tbody tr:hover { background: var(--surface-2); }
+      td.mono { font-family: var(--mono); font-size: 12px; }
+      td.narr { max-width: 380px; min-width: 260px; white-space: normal; color: var(--text-dim); font-size: 12px; }
+      .sev { font-weight: 600; }
+      .sev.high { color: var(--danger); } .sev.medium { color: var(--warn); } .sev.low { color: var(--text-dim); }
+      .wx-ok { color: var(--success); font-weight: 600; }
+
+      /* console */
+      details.console { margin-top: 8px; }
+      details.console summary { cursor: pointer; color: var(--text-dim); font-size: 12.5px; padding: 6px 0; }
+      pre { white-space: pre-wrap; word-break: break-word; background: #0d1220; color: #cbd5e8;
+        border-radius: var(--radius-sm); padding: 14px; font-family: var(--mono); font-size: 12px; margin: 6px 0 0; max-height: 320px; overflow: auto; }
+
+      /* toast */
+      #toast { position: fixed; top: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 50; }
+      .toast-item { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--accent);
+        border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 12px 16px; font-size: 13px; max-width: 380px;
+        animation: slidein .2s ease; }
+      .toast-item.ok { border-left-color: var(--success); }
+      .toast-item.err { border-left-color: var(--danger); }
+      @keyframes slidein { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: none; } }
+
+      .muted { color: var(--text-faint); font-size: 12px; }
+      .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+
+      @media (max-width: 820px) {
+        .app { grid-template-columns: 1fr; }
+        .sidebar { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; }
+        nav { flex-direction: row; flex-wrap: wrap; flex: 1; }
+        .sidebar-foot { border-top: 0; }
+        .wrap, .topbar { padding-left: 18px; padding-right: 18px; }
+      }
     </style>
   </head>
   <body>
-    <header><h1>Threat Intel Hub</h1></header>
-    <main>
-      <section>
-        <h2>情报源 API Key</h2>
-        <div class="grid">
-          <label>OTX API Key <input id="otx_api_key" type="password" placeholder="******"></label>
-          <label>WhoisXML API Key <input id="whoisxml_api_key" type="password" placeholder="******"></label>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand"><span class="logo">🛡️</span> Threat Intel Hub</div>
+        <nav>
+          <button class="nav-item active" data-panel="overview"><span class="ic">📊</span> 概览</button>
+          <button class="nav-item" data-panel="sources"><span class="ic">📡</span> 情报源</button>
+          <button class="nav-item" data-panel="ai"><span class="ic">🤖</span> AI 描述</button>
+          <button class="nav-item" data-panel="pipeline"><span class="ic">⚙️</span> 每日流水线</button>
+          <button class="nav-item" data-panel="push"><span class="ic">📤</span> 推送规则</button>
+          <button class="nav-item" data-panel="intel"><span class="ic">🎯</span> 情报列表</button>
+        </nav>
+        <div class="sidebar-foot">
+          <span>v2026.07</span>
+          <button class="theme-btn" id="theme-toggle" title="切换主题">🌓</button>
         </div>
-        <div class="actions">
-          <button id="save-sources">保存情报源 Key</button>
-          <button id="test-otx" class="secondary">测试 OTX</button>
-          <button id="sync-otx-now" class="secondary">立即拉取 OTX</button>
-          <button id="test-whoisxml" class="secondary">测试 WhoisXML</button>
-          <button id="enrich-whoisxml" class="secondary">立即富化 high 档</button>
+      </aside>
+
+      <div class="content">
+        <div class="topbar">
+          <div>
+            <h1 id="page-title">概览</h1>
+            <div class="sub" id="page-sub">威胁情报聚合平台运行态势</div>
+          </div>
+          <button class="btn" id="quick-run"><span>▶</span> 立即运行流水线</button>
         </div>
-        <div id="sources_status" class="hint"></div>
-        <p class="hint">Key 密文保存后由 OTX / WhoisXML 同步脚本(scripts/*.py)读取导入 MISP,再由本平台聚合精选。测试按钮经宿主机代理验证 Key 连通性。</p>
-      </section>
-      <section>
-        <h2>LLM 证据润色(可选)</h2>
-        <div class="grid">
-          <label>启用 LLM <input id="llm_enabled" type="checkbox"></label>
-          <label>Base URL <input id="llm_base_url" autocomplete="off" placeholder="https://api.openai.com/v1"></label>
-          <label>API Key <input id="llm_api_key" type="password" placeholder="******"></label>
-          <label>Model <input id="llm_model" autocomplete="off" placeholder="gpt-4o-mini"></label>
+        <div class="wrap">
+
+          <!-- 概览 -->
+          <section id="panel-overview" class="panel active">
+            <div class="stats">
+              <div class="stat"><div class="k">🎯 精选情报</div><div class="v" id="s-total">—</div></div>
+              <div class="stat"><div class="k">✔ WhoisXML 确认</div><div class="v" id="s-confirmed">—</div></div>
+              <div class="stat"><div class="k">🤖 描述覆盖</div><div class="v" id="s-narrated">—</div></div>
+              <div class="stat"><div class="k">📤 已推送</div><div class="v" id="s-pushed">—</div></div>
+            </div>
+            <div class="card">
+              <h2>数据源健康</h2>
+              <p class="desc">点击检测各来源与 LLM 的连通性(会实际发一次探测请求)。</p>
+              <div class="health-row">
+                <div class="health-item"><span class="name">OTX</span><span class="badge" id="h-otx"><span class="dot"></span>未测</span><button class="ghost btn" data-health="otx" style="margin-left:auto;padding:6px 11px">检测</button></div>
+                <div class="health-item"><span class="name">WhoisXML</span><span class="badge" id="h-whoisxml"><span class="dot"></span>未测</span><button class="ghost btn" data-health="whoisxml" style="margin-left:auto;padding:6px 11px">检测</button></div>
+                <div class="health-item"><span class="name">LLM</span><span class="badge" id="h-llm"><span class="dot"></span>未测</span><button class="ghost btn" data-health="llm" style="margin-left:auto;padding:6px 11px">检测</button></div>
+              </div>
+            </div>
+            <div class="card">
+              <h2>推送状态</h2>
+              <p class="desc" id="push-summary">加载中…</p>
+              <div class="actions">
+                <button class="ghost btn" id="push-status">刷新状态</button>
+                <a class="ghost btn" href="/downloads/latest">最新部署包</a>
+                <a class="ghost btn" href="/downloads/traffic-ioc.txt">IOC .txt</a>
+                <a class="ghost btn" href="/downloads/traffic-ioc.csv">.csv</a>
+                <a class="ghost btn" href="/downloads/traffic-ioc.json">.json</a>
+              </div>
+              <details class="console"><summary>调试输出(原始响应)</summary><pre id="output"></pre></details>
+            </div>
+          </section>
+
+          <!-- 情报源 -->
+          <section id="panel-sources" class="panel">
+            <div class="card">
+              <h2>情报源 API Key</h2>
+              <p class="desc">Key 密文保存。OTX 为主数据源(直连拉取);WhoisXML(Free 档)用于对高危 IOC 做交叉验证富化。</p>
+              <div class="card-row">
+                <label>OTX API Key <input id="otx_api_key" type="password" placeholder="******"></label>
+                <label>WhoisXML API Key <input id="whoisxml_api_key" type="password" placeholder="******"></label>
+              </div>
+              <div class="actions">
+                <button class="btn" id="save-sources">保存 Key</button>
+                <button class="ghost btn" id="test-otx">测试 OTX</button>
+                <button class="ghost btn" id="sync-otx-now">立即拉取 OTX</button>
+                <button class="ghost btn" id="test-whoisxml">测试 WhoisXML</button>
+                <button class="ghost btn" id="enrich-whoisxml">富化 high 档</button>
+              </div>
+              <div class="status" id="sources_status"></div>
+            </div>
+          </section>
+
+          <!-- AI 描述 -->
+          <section id="panel-ai" class="panel">
+            <div class="card">
+              <h2>LLM 证据润色(可选)</h2>
+              <p class="desc">OpenAI 兼容接口,只把结构化证据润色成自然语言告警、不产生新事实。OpenAI: https://api.openai.com/v1 · DeepSeek: https://api.deepseek.com/v1 · 本地 Ollama: http://host.docker.internal:11434/v1</p>
+              <div class="card-row">
+                <label class="switch" style="grid-auto-flow:column;justify-content:start"><input id="llm_enabled" type="checkbox"> 启用 LLM</label>
+                <label>Base URL <input id="llm_base_url" autocomplete="off" placeholder="https://api.openai.com/v1"></label>
+                <label>API Key <input id="llm_api_key" type="password" placeholder="******"></label>
+                <label>Model <input id="llm_model" autocomplete="off" placeholder="gpt-4o-mini"></label>
+              </div>
+              <div class="actions">
+                <button class="btn" id="save-llm">保存 LLM 配置</button>
+                <button class="ghost btn" id="test-llm">测试 LLM</button>
+                <button class="ghost btn" id="gen-narrative">生成告警叙述(high 档)</button>
+              </div>
+              <div class="status" id="llm_status"></div>
+            </div>
+          </section>
+
+          <!-- 流水线 -->
+          <section id="panel-pipeline" class="panel">
+            <div class="card">
+              <h2>每日流水线 · 23:00 自动</h2>
+              <p class="desc">每日 23:00(Asia/Shanghai)自动执行:直连拉 OTX(去误报)→ WhoisXML 富化补足(受额度上限保护)→ LLM 描述 → 生成 intel.yaml 推送。攒够「目标条数」条 WhoisXML 确认的高危情报、每条带描述后进推送通道。</p>
+              <div class="card-row">
+                <label>目标条数 <input id="pipeline_target" type="number" min="1"></label>
+                <label>富化次数上限/天 <input id="pipeline_max_enrich" type="number" min="1"></label>
+              </div>
+              <div class="actions">
+                <button class="btn" id="save-pipeline">保存流水线配置</button>
+                <button class="ghost btn" id="run-pipeline">立即运行流水线</button>
+              </div>
+              <div class="status" id="pipeline_status"></div>
+            </div>
+          </section>
+
+          <!-- 推送规则 -->
+          <section id="panel-push" class="panel">
+            <div class="grid-2">
+              <div class="card">
+                <h2>ta_node 规则配置</h2>
+                <p class="desc">生成推送给流量分析节点的 intel.yaml(每条带结构化证据 + LLM 描述)。</p>
+                <div class="card-row">
+                  <label class="switch" style="grid-auto-flow:column;justify-content:start"><input id="ta_node_enabled" type="checkbox"> 启用生成</label>
+                  <label>来源名 <input id="ta_node_source_name"></label>
+                  <label>生成间隔(秒) <input id="ta_node_push_interval_seconds" type="number" min="10"></label>
+                  <label>每源条数(0=不限) <input id="ta_node_top_per_source" type="number" min="0"></label>
+                  <label>最低危险度
+                    <select id="ta_node_min_severity"><option value="high">high</option><option value="medium">medium</option><option value="low">low</option></select>
+                  </label>
+                  <label>输出目录 <input id="ioc_output_dir" autocomplete="off"></label>
+                  <label>规则文件名 <input id="ioc_rule_filename" autocomplete="off"></label>
+                </div>
+                <div class="actions">
+                  <button class="btn" id="save">保存全部配置</button>
+                  <button class="ghost btn" id="push-full">生成全量规则包</button>
+                  <button class="ghost btn" id="push-inc">生成增量规则包</button>
+                </div>
+                <div class="status" id="push_status_line"></div>
+              </div>
+              <div class="card">
+                <h2>手动上传规则</h2>
+                <p class="desc">直接上传 ta_node intel.yaml / zip 到网闸目录。</p>
+                <label>规则文件 <input id="ioc_upload_file" type="file" accept=".yaml,.yml,.zip,application/zip,text/yaml,text/plain"></label>
+                <div class="actions"><button class="ghost btn" id="upload-ioc">上传到网闸目录</button></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- 情报列表 -->
+          <section id="panel-intel" class="panel">
+            <div class="card">
+              <h2>精选高危流量情报</h2>
+              <p class="desc">当前落地推送的精选情报 —— 每条经 WhoisXML 双源确认、带证据与自然语言描述。</p>
+              <div class="card-row" style="max-width:520px">
+                <label>每源条数 <input id="top_preview_n" type="number" min="0" value="10"></label>
+                <label>最低危险度
+                  <select id="top_preview_sev"><option value="high">high</option><option value="medium">medium</option><option value="low">low</option></select>
+                </label>
+              </div>
+              <div class="actions"><button class="btn" id="load-top">刷新列表</button></div>
+              <div class="muted" id="top_meta" style="margin:14px 0 8px"></div>
+              <div id="top_table"></div>
+            </div>
+          </section>
+
         </div>
-        <div class="actions">
-          <button id="save-llm">保存 LLM 配置</button>
-          <button id="test-llm" class="secondary">测试 LLM</button>
-          <button id="gen-narrative" class="secondary">生成告警叙述(high 档)</button>
-        </div>
-        <div id="llm_status" class="hint"></div>
-        <p class="hint">OpenAI 兼容接口,只把结构化证据润色成自然语言、不产生新事实。OpenAI 用 https://api.openai.com/v1;DeepSeek 用 https://api.deepseek.com/v1;本地 Ollama 用 http://host.docker.internal:11434/v1。</p>
-      </section>
-      <section>
-        <h2>每日流水线(23:00 自动)</h2>
-        <div class="grid">
-          <label>目标条数 <input id="pipeline_target" type="number" min="1"></label>
-          <label>富化次数上限/天 <input id="pipeline_max_enrich" type="number" min="1"></label>
-        </div>
-        <div class="actions">
-          <button id="save-pipeline">保存流水线配置</button>
-          <button id="run-pipeline" class="secondary">立即运行流水线</button>
-        </div>
-        <div id="pipeline_status" class="hint"></div>
-        <p class="hint">每日 23:00(Asia/Shanghai)自动:拉 OTX → WhoisXML 富化补足(上限保额度)→ LLM 描述 → 推送。攒够「目标条数」条 WhoisXML 确认的高危情报、每条带描述后进推送通道。</p>
-      </section>
-      <section>
-        <h2>ta_node 规则文件</h2>
-        <div class="grid">
-          <label>Enable Generate <input id="ta_node_enabled" type="checkbox"></label>
-          <label>Source Name <input id="ta_node_source_name"></label>
-          <label>Generate Interval Seconds <input id="ta_node_push_interval_seconds" type="number" min="10"></label>
-          <label>每源条数 (0=不限) <input id="ta_node_top_per_source" type="number" min="0"></label>
-          <label>最低危险度
-            <select id="ta_node_min_severity">
-              <option value="high">high</option>
-              <option value="medium">medium</option>
-              <option value="low">low</option>
-            </select>
-          </label>
-          <label>Output Directory <input id="ioc_output_dir" autocomplete="off"></label>
-          <label>Rule Filename <input id="ioc_rule_filename" autocomplete="off"></label>
-        </div>
-        <div class="actions">
-          <button id="save">保存全部配置</button>
-          <button id="push-full" class="secondary">生成全量规则包</button>
-          <button id="push-inc" class="secondary">生成增量规则包</button>
-        </div>
-      </section>
-      <section>
-        <h2>手动上传规则文件</h2>
-        <div class="grid">
-          <label>ta_node intel.yaml / zip <input id="ioc_upload_file" type="file" accept=".yaml,.yml,.zip,application/zip,text/yaml,text/plain"></label>
-        </div>
-        <div class="actions">
-          <button id="upload-ioc" class="secondary">上传到网闸目录</button>
-        </div>
-      </section>
-      <section>
-        <h2>每日 Top 高危流量情报</h2>
-        <div class="grid">
-          <label>预览每源条数 <input id="top_preview_n" type="number" min="0" value="10"></label>
-          <label>预览最低危险度
-            <select id="top_preview_sev">
-              <option value="high">high</option>
-              <option value="medium">medium</option>
-              <option value="low">low</option>
-            </select>
-          </label>
-        </div>
-        <div class="actions"><button id="load-top" class="secondary">刷新 Top 列表</button></div>
-        <div id="top_table" style="overflow-x:auto"></div>
-      </section>
-      <section>
-        <h2>状态与下载</h2>
-        <div class="actions">
-          <button id="push-status" class="secondary">推送状态</button>
-          <a class="button secondary" href="/downloads/latest">最新部署包</a>
-          <a class="button secondary" href="/downloads/traffic-ioc.txt">traffic-ioc.txt</a>
-          <a class="button secondary" href="/downloads/traffic-ioc.csv">traffic-ioc.csv</a>
-          <a class="button secondary" href="/downloads/traffic-ioc.json">traffic-ioc.json</a>
-        </div>
-        <pre id="output"></pre>
-      </section>
-    </main>
-    <script src="/static/config.js?v=20260707i"></script>
+      </div>
+    </div>
+    <div id="toast"></div>
+    <script src="/static/config.js?v=20260707j"></script>
   </body>
 </html>

@@ -1,26 +1,29 @@
 const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
 const fields = [
-  "ta_node_enabled",
-  "ta_node_base_url",
-  "ta_node_token",
-  "ta_node_source_name",
-  "ta_node_push_interval_seconds",
-  "ioc_output_dir",
-  "ioc_rule_filename",
-  "otx_api_key",
-  "whoisxml_api_key",
-  "ta_node_top_per_source",
-  "ta_node_min_severity",
-  "llm_enabled",
-  "llm_base_url",
-  "llm_api_key",
-  "llm_model",
-  "pipeline_target",
-  "pipeline_max_enrich",
+  "ta_node_enabled", "ta_node_source_name", "ta_node_push_interval_seconds",
+  "ioc_output_dir", "ioc_rule_filename", "otx_api_key", "whoisxml_api_key",
+  "ta_node_top_per_source", "ta_node_min_severity",
+  "llm_enabled", "llm_base_url", "llm_api_key", "llm_model",
+  "pipeline_target", "pipeline_max_enrich",
 ];
 
-function show(data) {
-  $("output").textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+function show(data) { $("output").textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2); }
+
+function toast(msg, type) {
+  const el = document.createElement("div");
+  el.className = "toast-item " + (type || "");
+  el.textContent = typeof msg === "string" ? msg : JSON.stringify(msg);
+  $("toast").appendChild(el);
+  setTimeout(() => el.remove(), 4200);
+}
+
+function setStatus(id, msg, kind) {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = "status" + (kind ? " " + kind : "");
 }
 
 async function api(path, options = {}) {
@@ -52,154 +55,167 @@ function collectConfig() {
   return data;
 }
 
-$("save").onclick = async () => show(await api("/api/config", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(collectConfig()),
-}));
-$("push-full").onclick = async () => show(await api("/ioc-rules/generate", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ mode: "full" }),
-}));
-$("push-inc").onclick = async () => show(await api("/ioc-rules/generate", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ mode: "incremental" }),
-}));
-$("push-status").onclick = async () => show(await api("/push/ta-node/status"));
-$("upload-ioc").onclick = async () => {
-  const file = $("ioc_upload_file").files[0];
-  if (!file) {
-    show("请选择 ta_node intel.yaml 或同名 zip 文件");
-    return;
-  }
-  const body = new FormData();
-  body.append("file", file);
-  show(await api("/ioc-rules/upload", { method: "POST", body }));
+async function saveConfig(statusId, okMsg) {
+  setStatus(statusId, "保存中…");
+  try {
+    await api("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(collectConfig()) });
+    await loadConfig();
+    setStatus(statusId, "✓ " + okMsg, "ok");
+    toast(okMsg, "ok");
+  } catch (e) { setStatus(statusId, "✗ 保存失败", "err"); toast(e, "err"); show(e); }
+}
+
+// ---- 导航 + 主题 ----
+const titles = {
+  overview: ["概览", "威胁情报聚合平台运行态势"],
+  sources: ["情报源", "OTX / WhoisXML 数据源配置"],
+  ai: ["AI 描述", "LLM 证据润色配置"],
+  pipeline: ["每日流水线", "自动化编排 · 每日 23:00"],
+  push: ["推送规则", "ta_node 规则生成与上传"],
+  intel: ["情报列表", "精选高危流量情报"],
+};
+document.querySelectorAll(".nav-item").forEach((b) => {
+  b.onclick = () => {
+    document.querySelectorAll(".nav-item").forEach((x) => x.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+    const p = b.dataset.panel;
+    $("panel-" + p).classList.add("active");
+    $("page-title").textContent = titles[p][0];
+    $("page-sub").textContent = titles[p][1];
+    if (p === "overview") loadOverview();
+    if (p === "intel") loadTop();
+  };
+});
+
+if (localStorage.getItem("theme")) document.documentElement.setAttribute("data-theme", localStorage.getItem("theme"));
+$("theme-toggle").onclick = () => {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const isDark = cur === "dark" || (!cur && matchMedia("(prefers-color-scheme: dark)").matches);
+  const next = isDark ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("theme", next);
 };
 
+// ---- 概览 ----
+async function loadOverview() {
+  try {
+    const top = await api("/indicators/top?top_per_source=100&min_severity=low");
+    const items = top.sources.flatMap((s) => s.items);
+    $("s-total").textContent = items.length;
+    $("s-confirmed").textContent = items.filter((i) => (i.whoisxml || {}).threat_type).length;
+    const narr = items.filter((i) => i.narrative).length;
+    $("s-narrated").innerHTML = narr + ` <small>/ ${items.length}</small>`;
+  } catch (e) { /* 忽略概览加载错误 */ }
+  try {
+    const ps = await api("/push/ta-node/status");
+    $("s-pushed").textContent = ps.generated_count ?? "—";
+    $("push-summary").textContent = `已生成 ${ps.generated_count ?? 0} 条 · 待推 ${ps.pending_count ?? 0} · 最近成功 ${ps.last_success_at ?? "—"}` + (ps.last_error ? ` · 错误 ${ps.last_error}` : "");
+    show(ps);
+  } catch (e) { $("push-summary").textContent = "推送状态获取失败"; }
+}
+
+async function checkHealth(name) {
+  const badge = $("h-" + name);
+  badge.className = "badge"; badge.innerHTML = '<span class="dot"></span>检测中…';
+  try {
+    const r = await api("/health/" + name);
+    const cls = r.status === "ok" ? "ok" : (r.status === "failed" ? "bad" : "warn");
+    badge.className = "badge " + cls;
+    badge.innerHTML = '<span class="dot"></span>' + r.status + (r.model ? " · " + r.model : "");
+    show(r);
+  } catch (e) { badge.className = "badge bad"; badge.innerHTML = '<span class="dot"></span>失败'; show(e); }
+}
+document.querySelectorAll("[data-health]").forEach((b) => { b.onclick = () => checkHealth(b.dataset.health); });
+
+// ---- 情报列表 ----
 function renderTop(resp) {
-  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   const rows = [];
   for (const src of resp.sources) {
     for (const item of src.items) {
       const wx = item.whoisxml
-        ? (item.whoisxml.threat_type ? `✔ ${item.whoisxml.threat_type}` : "已查·无记录")
-        : "—";
-      const narr = item.narrative ? esc(item.narrative) : "—";
-      rows.push(`<tr><td>${esc(src.source)}</td><td>${esc(item.value)}</td><td>${esc(item.misp_type)}</td>` +
-        `<td>${esc(item.severity)}</td><td>${esc(item.confidence)}</td>` +
-        `<td>${esc(wx)}</td><td class="narr">${narr}</td><td>${esc(item.last_seen)}</td></tr>`);
+        ? (item.whoisxml.threat_type ? `<span class="wx-ok">✔ ${esc(item.whoisxml.threat_type)}</span>` : '<span class="muted">已查·无记录</span>')
+        : '<span class="muted">—</span>';
+      const sev = `<span class="sev ${esc(item.severity)}">${esc(item.severity)}</span>`;
+      const narr = item.narrative ? esc(item.narrative) : '<span class="muted">—</span>';
+      rows.push(`<tr><td>${esc(src.source)}</td><td class="mono">${esc(item.value)}</td><td>${esc(item.misp_type)}</td>` +
+        `<td>${sev}</td><td>${esc(item.confidence ?? "")}</td><td>${wx}</td><td class="narr">${narr}</td></tr>`);
     }
   }
-  const summary = `generated_at=${resp.generated_at} · top_per_source=${resp.top_per_source}` +
-    ` · min_severity=${resp.min_severity} · 共 ${rows.length} 条`;
-  $("top_table").innerHTML = `<p>${summary}</p>` +
-    `<table class="top"><thead><tr><th>源</th><th>值</th><th>类型</th>` +
-    `<th>危险度</th><th>置信度</th><th>WhoisXML</th><th>LLM 描述</th><th>最近出现</th></tr></thead><tbody>${rows.join("")}</tbody></table>`;
+  $("top_meta").textContent = `共 ${rows.length} 条 · 最低危险度 ${resp.min_severity} · 每源上限 ${resp.top_per_source}`;
+  $("top_table").innerHTML = `<div class="table-wrap"><table><thead><tr><th>源</th><th>IOC</th><th>类型</th>` +
+    `<th>危险度</th><th>置信</th><th>WhoisXML</th><th>LLM 描述</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
 }
+async function loadTop() {
+  const n = $("top_preview_n").value || 10;
+  const sev = $("top_preview_sev").value || "high";
+  try { renderTop(await api(`/indicators/top?top_per_source=${n}&min_severity=${sev}`)); }
+  catch (e) { toast(e, "err"); show(e); }
+}
+$("load-top").onclick = loadTop;
 
-$("load-top").onclick = async () => {
-  const n = $("top_preview_n").value;
-  const sev = $("top_preview_sev").value;
-  try {
-    renderTop(await api(`/indicators/top?top_per_source=${n}&min_severity=${sev}`));
-  } catch (e) { show(e); }
-};
-
-$("save-sources").onclick = async () => {
-  const st = $("sources_status");
-  st.textContent = "保存中…";
-  try {
-    await api("/api/config", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(collectConfig()),
-    });
-    await loadConfig();
-    st.textContent = "✓ 情报源 Key 已保存(密文存储,回显为 masked)";
-    show("情报源 Key 已保存");
-  } catch (e) {
-    st.textContent = "✗ 保存失败: " + (typeof e === "string" ? e : JSON.stringify(e));
-    show(e);
-  }
-};
-async function runHealth(name, path) {
-  const st = $("sources_status");
-  st.textContent = `测试 ${name} 中…`;
+// ---- 情报源 ----
+$("save-sources").onclick = () => saveConfig("sources_status", "情报源 Key 已保存(密文,回显 masked)");
+async function runHealth(name, path, statusId) {
+  setStatus(statusId, `测试 ${name} 中…`);
   try {
     const r = await api(path);
-    st.textContent = `${name}: ${r.status}` + (r.error ? ` — ${r.error}` : "") + (r.username ? ` (${r.username})` : "");
+    const line = `${name}: ${r.status}` + (r.model ? ` · ${r.model}` : "") + (r.username ? ` (${r.username})` : "") + (r.error ? ` — ${r.error}` : "") + (r.reason ? ` — ${r.reason}` : "");
+    setStatus(statusId, line, r.status === "ok" ? "ok" : "");
+    toast(line, r.status === "ok" ? "ok" : "");
     show(r);
-  } catch (e) {
-    st.textContent = `${name} 测试失败: ` + (typeof e === "string" ? e : JSON.stringify(e));
-    show(e);
-  }
+  } catch (e) { setStatus(statusId, `${name} 测试失败`, "err"); toast(e, "err"); show(e); }
 }
-$("test-otx").onclick = () => runHealth("OTX", "/health/otx");
-$("test-whoisxml").onclick = () => runHealth("WhoisXML", "/health/whoisxml");
-$("enrich-whoisxml").onclick = async () => {
-  const st = $("sources_status");
-  st.textContent = "富化中(查询 WhoisXML,约 10 次)…";
-  try {
-    const r = await api("/enrich/whoisxml", { method: "POST" });
-    st.textContent = `富化完成: ${r.enriched ?? 0} 条(确认恶意 ${r.confirmed_malicious ?? 0}, 失败 ${r.failed ?? 0})`;
-    show(r);
-  } catch (e) { st.textContent = "富化失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
-};
+$("test-otx").onclick = () => runHealth("OTX", "/health/otx", "sources_status");
+$("test-whoisxml").onclick = () => runHealth("WhoisXML", "/health/whoisxml", "sources_status");
 $("sync-otx-now").onclick = async () => {
-  const st = $("sources_status");
-  st.textContent = "拉取 OTX 中(后台创建 MISP 事件)…";
-  try {
-    const r = await api("/sync/otx", { method: "POST" });
-    st.textContent = "OTX 拉取已在后台执行,约 1 分钟后点「手动同步」或等每日 Top 刷新";
-    show(r);
-  } catch (e) { st.textContent = "OTX 拉取失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
+  setStatus("sources_status", "拉取 OTX 中(后台直连入库)…");
+  try { const r = await api("/sync/otx", { method: "POST" }); setStatus("sources_status", "✓ OTX 拉取已在后台执行", "ok"); toast("OTX 拉取已启动", "ok"); show(r); }
+  catch (e) { setStatus("sources_status", "OTX 拉取失败", "err"); toast(e, "err"); show(e); }
 };
-$("save-llm").onclick = async () => {
-  const st = $("llm_status");
-  st.textContent = "保存中…";
-  try {
-    await api("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(collectConfig()) });
-    await loadConfig();
-    st.textContent = "✓ LLM 配置已保存(Key 密文,回显 masked)";
-    show("LLM 配置已保存");
-  } catch (e) { st.textContent = "✗ 保存失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
-};
-$("test-llm").onclick = async () => {
-  const st = $("llm_status");
-  st.textContent = "测试 LLM 中…";
-  try {
-    const r = await api("/health/llm");
-    st.textContent = `LLM: ${r.status}` + (r.model ? ` · ${r.model}` : "") + (r.reply ? ` · 回复"${r.reply}"` : "") + (r.error ? ` · ${r.error}` : "") + (r.reason ? ` · ${r.reason}` : "");
-    show(r);
-  } catch (e) { st.textContent = "测试失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
-};
-$("gen-narrative").onclick = async () => {
-  const st = $("llm_status");
-  st.textContent = "生成告警叙述中(调用 LLM)…";
-  try {
-    const r = await api("/enrich/narrative", { method: "POST" });
-    st.textContent = `叙述生成: ${r.generated ?? 0} 条(失败 ${r.failed ?? 0})` + (r.reason ? ` — ${r.reason}` : "") + (r.error ? ` — ${r.error}` : "");
-    show(r);
-  } catch (e) { st.textContent = "生成失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
-};
-$("save-pipeline").onclick = async () => {
-  const st = $("pipeline_status");
-  st.textContent = "保存中…";
-  try {
-    await api("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(collectConfig()) });
-    await loadConfig();
-    st.textContent = "✓ 流水线配置已保存";
-  } catch (e) { st.textContent = "✗ 保存失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
-};
-$("run-pipeline").onclick = async () => {
-  const st = $("pipeline_status");
-  st.textContent = "流水线已在后台运行(拉取 → 富化 → LLM → 推送,可能数分钟)。稍后查看每日 Top / 推送状态。";
-  try {
-    show(await api("/pipeline/run", { method: "POST" }));
-  } catch (e) { st.textContent = "启动失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
+$("enrich-whoisxml").onclick = async () => {
+  setStatus("sources_status", "富化中(查询 WhoisXML)…");
+  try { const r = await api("/enrich/whoisxml", { method: "POST" }); const m = `富化 ${r.enriched ?? 0} 条(确认 ${r.confirmed_malicious ?? 0}, 失败 ${r.failed ?? 0})`; setStatus("sources_status", "✓ " + m, "ok"); toast(m, "ok"); show(r); }
+  catch (e) { setStatus("sources_status", "富化失败", "err"); toast(e, "err"); show(e); }
 };
 
-loadConfig().catch(show);
+// ---- AI 描述 ----
+$("save-llm").onclick = () => saveConfig("llm_status", "LLM 配置已保存(Key 密文)");
+$("test-llm").onclick = () => runHealth("LLM", "/health/llm", "llm_status");
+$("gen-narrative").onclick = async () => {
+  setStatus("llm_status", "生成告警叙述中(调用 LLM)…");
+  try { const r = await api("/enrich/narrative", { method: "POST" }); const m = `叙述生成 ${r.generated ?? 0} 条(失败 ${r.failed ?? 0})` + (r.reason ? ` — ${r.reason}` : ""); setStatus("llm_status", "✓ " + m, "ok"); toast(m, "ok"); show(r); }
+  catch (e) { setStatus("llm_status", "生成失败", "err"); toast(e, "err"); show(e); }
+};
+
+// ---- 流水线 ----
+$("save-pipeline").onclick = () => saveConfig("pipeline_status", "流水线配置已保存");
+async function runPipeline(statusId) {
+  setStatus(statusId, "流水线已在后台运行(拉取 → 富化 → LLM → 推送,可能数分钟)…");
+  toast("每日流水线已启动", "ok");
+  try { show(await api("/pipeline/run", { method: "POST" })); }
+  catch (e) { setStatus(statusId, "启动失败", "err"); toast(e, "err"); show(e); }
+}
+$("run-pipeline").onclick = () => runPipeline("pipeline_status");
+$("quick-run").onclick = () => runPipeline("pipeline_status");
+
+// ---- 推送规则 ----
+$("save").onclick = () => saveConfig("push_status_line", "全部配置已保存");
+async function genRules(mode) {
+  setStatus("push_status_line", `生成${mode === "full" ? "全量" : "增量"}规则中…`);
+  try { const r = await api("/ioc-rules/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }) }); const m = `已生成 ${r.count ?? 0} 条规则`; setStatus("push_status_line", "✓ " + m, "ok"); toast(m, "ok"); show(r); }
+  catch (e) { setStatus("push_status_line", "生成失败", "err"); toast(e, "err"); show(e); }
+}
+$("push-full").onclick = () => genRules("full");
+$("push-inc").onclick = () => genRules("incremental");
+$("upload-ioc").onclick = async () => {
+  const file = $("ioc_upload_file").files[0];
+  if (!file) { toast("请先选择 intel.yaml / zip 文件", "err"); return; }
+  const body = new FormData(); body.append("file", file);
+  try { const r = await api("/ioc-rules/upload", { method: "POST", body }); toast("上传成功", "ok"); show(r); }
+  catch (e) { toast(e, "err"); show(e); }
+};
+$("push-status").onclick = async () => { try { show(await api("/push/ta-node/status")); await loadOverview(); toast("已刷新推送状态", "ok"); } catch (e) { toast(e, "err"); show(e); } };
+
+// 初始化
+loadConfig().then(loadOverview).catch((e) => toast(e, "err"));
