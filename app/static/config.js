@@ -1,9 +1,5 @@
 const $ = (id) => document.getElementById(id);
 const fields = [
-  "misp_url",
-  "misp_api_key",
-  "misp_verify_cert",
-  "misp_sync_interval_seconds",
   "ta_node_enabled",
   "ta_node_base_url",
   "ta_node_token",
@@ -61,8 +57,6 @@ $("save").onclick = async () => show(await api("/api/config", {
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify(collectConfig()),
 }));
-$("test-misp").onclick = async () => show(await api("/health/misp"));
-$("sync-misp").onclick = async () => show(await api("/sync/misp", { method: "POST" }));
 $("push-full").onclick = async () => show(await api("/ioc-rules/generate", {
   method: "POST",
   headers: { "Content-Type": "application/json" },

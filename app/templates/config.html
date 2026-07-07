@@ -31,20 +31,6 @@
     <header><h1>Threat Intel Hub</h1></header>
     <main>
       <section>
-        <h2>MISP 配置</h2>
-        <div class="grid">
-          <label>MISP URL <input id="misp_url" autocomplete="off"></label>
-          <label>MISP API Key <input id="misp_api_key" type="password" placeholder="******"></label>
-          <label>Verify Cert <input id="misp_verify_cert" type="checkbox"></label>
-          <label>Sync Interval Seconds <input id="misp_sync_interval_seconds" type="number" min="10"></label>
-        </div>
-        <div class="actions">
-          <button id="save">保存配置</button>
-          <button id="test-misp" class="secondary">测试 MISP</button>
-          <button id="sync-misp" class="secondary">手动同步</button>
-        </div>
-      </section>
-      <section>
         <h2>情报源 API Key</h2>
         <div class="grid">
           <label>OTX API Key <input id="otx_api_key" type="password" placeholder="******"></label>
@@ -107,6 +93,7 @@
           <label>Rule Filename <input id="ioc_rule_filename" autocomplete="off"></label>
         </div>
         <div class="actions">
+          <button id="save">保存全部配置</button>
           <button id="push-full" class="secondary">生成全量规则包</button>
           <button id="push-inc" class="secondary">生成增量规则包</button>
         </div>
@@ -147,6 +134,6 @@
         <pre id="output"></pre>
       </section>
     </main>
-    <script src="/static/config.js?v=20260707h"></script>
+    <script src="/static/config.js?v=20260707i"></script>
   </body>
 </html>
