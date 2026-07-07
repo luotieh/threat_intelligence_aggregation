@@ -34,17 +34,73 @@ TYPE_MAP = {
 }
 
 
+def build_evidence(indicator: IntelIndicator) -> dict:
+    """从 raw(MISP 事件)+ tags + whoisxml 提取结构化命中证据,全部可溯源,无 LLM。"""
+    raw = indicator.raw or {}
+    event = raw.get("Event") or {}
+    tags = tag_names(indicator)
+    threat_labels = []
+    for t in tags:
+        if t.startswith("otx:tag="):
+            threat_labels.append(t.split("=", 1)[1].strip('"'))
+        elif not t.startswith(("tlp:", "source:", "type:", "whoisxml:", "misp:")):
+            threat_labels.append(t)
+    wx_results = (raw.get("whoisxml") or {}).get("results") or []
+    cross_check = None
+    if wx_results:
+        r = wx_results[0]
+        cross_check = (f"WhoisXML={r.get('threatType')}, "
+                       f"seen {(r.get('firstSeen') or '')[:10]}~{(r.get('lastSeen') or '')[:10]}")
+    source = next((t.split(":", 1)[1] for t in tags if t.startswith("source:")), None) \
+        or (event.get("Org") or {}).get("name") or "misp"
+    n_sources = 1 + (1 if cross_check else 0)
+    activity = (event.get("info") or "").replace("OTX | ", "").strip() or None
+    return {
+        "activity": activity,
+        "threat_labels": threat_labels[:8],
+        "source": source,
+        "cross_check": cross_check,
+        "confidence": f"{indicator.severity or 'medium'} ({n_sources} source{'s' if n_sources > 1 else ''})",
+        "tlp": indicator.tlp,
+        "misp_event_id": event.get("id") or indicator.misp_event_id,
+    }
+
+
+def build_description(evidence: dict) -> str:
+    parts = []
+    if evidence.get("activity"):
+        parts.append(f"命中威胁: {evidence['activity']}")
+    if evidence.get("threat_labels"):
+        parts.append(f"关联: {', '.join(evidence['threat_labels'][:6])}")
+    if evidence.get("cross_check"):
+        parts.append(f"交叉验证: {evidence['cross_check']}")
+    parts.append(f"来源: {evidence['source']} · 置信: {evidence['confidence']}")
+    if evidence.get("tlp"):
+        parts.append(f"TLP:{evidence['tlp'].upper()}")
+    return " | ".join(parts)
+
+
+def recommended_action(indicator: IntelIndicator, category: str) -> str:
+    if category in {"c2", "ransomware", "botnet"} or (indicator.severity or "") == "high":
+        return "block_and_report"
+    return "block"
+
+
 def map_indicator_to_ta_node_item(indicator: IntelIndicator) -> dict:
     value = indicator.normalized_value or indicator.value
     item_id = indicator.misp_attribute_uuid or hashlib.sha256(f"{indicator.misp_type}:{value}".encode()).hexdigest()
+    category = derive_category(indicator)
+    evidence = build_evidence(indicator)
     return {
         "id": item_id,
         "type": TYPE_MAP.get(indicator.misp_type, "pattern"),
         "value": value,
-        "category": derive_category(indicator),
+        "category": category,
         "severity": indicator.severity or "medium",
         "source": "",
-        "description": "",
+        "description": build_description(evidence),
+        "evidence": evidence,
+        "recommended_action": recommended_action(indicator, category),
         "tags": tag_names(indicator),
         "enabled": bool(indicator.to_ids and indicator.platform_category == "traffic"),
         "created_at": _timestamp(indicator.created_at),
@@ -104,7 +160,6 @@ def generate_ta_node_ioc_package(db: Session, mode: str = "incremental", batch_s
     for indicator in indicators:
         item = map_indicator_to_ta_node_item(indicator)
         item["source"] = s.ta_node_source_name
-        item["description"] = f"MISP {indicator.misp_type} IOC from Threat Intel Hub"
         item.setdefault("created_at", int(now.timestamp()))
         item["updated_at"] = int(now.timestamp())
         items.append(item)

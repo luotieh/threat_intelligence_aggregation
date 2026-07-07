@@ -29,3 +29,30 @@ def test_map_unknown_traffic_type_to_pattern(make_indicator):
 def test_indicator_without_uuid_generates_stable_id(make_indicator):
     indicator = make_indicator(misp_attribute_uuid=None)
     assert map_indicator_to_ta_node_item(indicator)["id"] == map_indicator_to_ta_node_item(indicator)["id"]
+
+
+def test_map_builds_structured_evidence(make_indicator):
+    ind = make_indicator(
+        misp_type="domain", normalized_value="evil.com", severity="high", tlp="white",
+        tags=[{"name": "source:otx"}, {"name": "tlp:white"}, {"name": 'otx:tag="akira"'},
+              {"name": 'otx:tag="adaptixc2"'}],
+        raw={"Event": {"info": "OTX | Akira ransomware campaign", "id": "5"},
+             "whoisxml": {"results": [{"threatType": "malware",
+                                       "firstSeen": "2025-01-01T00:00:00Z",
+                                       "lastSeen": "2026-01-01T00:00:00Z"}]}})
+    item = map_indicator_to_ta_node_item(ind)
+    ev = item["evidence"]
+    assert "akira" in ev["threat_labels"] and "adaptixc2" in ev["threat_labels"]
+    assert ev["cross_check"].startswith("WhoisXML=malware")
+    assert ev["source"] == "otx"
+    assert "2 sources" in ev["confidence"]
+    assert "Akira ransomware campaign" in item["description"]
+    assert item["recommended_action"] == "block_and_report"
+
+
+def test_map_evidence_without_enrichment(make_indicator):
+    ind = make_indicator(misp_type="domain", severity="medium", tags=[{"name": "source:circl"}], raw={})
+    item = map_indicator_to_ta_node_item(ind)
+    assert item["evidence"]["cross_check"] is None
+    assert "1 source" in item["evidence"]["confidence"]
+    assert item["recommended_action"] == "block"
