@@ -31,6 +31,8 @@ DEFAULTS: dict[str, str] = {
     "LLM_BASE_URL": "https://api.openai.com/v1",
     "LLM_API_KEY": "",
     "LLM_MODEL": "gpt-4o-mini",
+    "PIPELINE_TARGET": "10",
+    "PIPELINE_MAX_ENRICH": "16",
     "EXPORT_DIR": "release",
     "IOC_OUTPUT_DIR": "/data/ftp/ioc",
     "IOC_RULE_FILENAME": "intel.yaml",
@@ -74,6 +76,8 @@ class Settings:
     llm_base_url: str
     llm_api_key: str
     llm_model: str
+    pipeline_target: int
+    pipeline_max_enrich: int
     export_dir: str
     ioc_output_dir: str
     ioc_rule_filename: str
@@ -115,6 +119,8 @@ def settings_from_values(db_values: dict[str, str] | None = None) -> Settings:
         llm_base_url=value_for("LLM_BASE_URL", db_values).rstrip("/"),
         llm_api_key=value_for("LLM_API_KEY", db_values),
         llm_model=value_for("LLM_MODEL", db_values),
+        pipeline_target=int(value_for("PIPELINE_TARGET", db_values)),
+        pipeline_max_enrich=int(value_for("PIPELINE_MAX_ENRICH", db_values)),
         export_dir=value_for("EXPORT_DIR", db_values),
         ioc_output_dir=value_for("IOC_OUTPUT_DIR", db_values),
         ioc_rule_filename=value_for("IOC_RULE_FILENAME", db_values),

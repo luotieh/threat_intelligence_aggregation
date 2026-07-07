@@ -77,6 +77,19 @@
         <p class="hint">OpenAI 兼容接口,只把结构化证据润色成自然语言、不产生新事实。OpenAI 用 https://api.openai.com/v1;DeepSeek 用 https://api.deepseek.com/v1;本地 Ollama 用 http://host.docker.internal:11434/v1。</p>
       </section>
       <section>
+        <h2>每日流水线(23:00 自动)</h2>
+        <div class="grid">
+          <label>目标条数 <input id="pipeline_target" type="number" min="1"></label>
+          <label>富化次数上限/天 <input id="pipeline_max_enrich" type="number" min="1"></label>
+        </div>
+        <div class="actions">
+          <button id="save-pipeline">保存流水线配置</button>
+          <button id="run-pipeline" class="secondary">立即运行流水线</button>
+        </div>
+        <div id="pipeline_status" class="hint"></div>
+        <p class="hint">每日 23:00(Asia/Shanghai)自动:拉 OTX → WhoisXML 富化补足(上限保额度)→ LLM 描述 → 推送。攒够「目标条数」条 WhoisXML 确认的高危情报、每条带描述后进推送通道。</p>
+      </section>
+      <section>
         <h2>ta_node 规则文件</h2>
         <div class="grid">
           <label>Enable Generate <input id="ta_node_enabled" type="checkbox"></label>
@@ -134,6 +147,6 @@
         <pre id="output"></pre>
       </section>
     </main>
-    <script src="/static/config.js?v=20260707g"></script>
+    <script src="/static/config.js?v=20260707h"></script>
   </body>
 </html>

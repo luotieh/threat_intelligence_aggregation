@@ -30,6 +30,8 @@ API_TO_ENV = {
     "llm_base_url": "LLM_BASE_URL",
     "llm_api_key": "LLM_API_KEY",
     "llm_model": "LLM_MODEL",
+    "pipeline_target": "PIPELINE_TARGET",
+    "pipeline_max_enrich": "PIPELINE_MAX_ENRICH",
 }
 
 
@@ -91,6 +93,8 @@ def public_config(db: Session) -> dict:
         "llm_base_url": s.llm_base_url,
         "llm_model": s.llm_model,
         "llm_api_key_masked": bool(s.llm_api_key),
+        "pipeline_target": s.pipeline_target,
+        "pipeline_max_enrich": s.pipeline_max_enrich,
         "defaults": {
             "misp_verify_cert": parse_bool(DEFAULTS["MISP_VERIFY_CERT"]),
             "ta_node_enabled": parse_bool(DEFAULTS["TA_NODE_ENABLED"]),

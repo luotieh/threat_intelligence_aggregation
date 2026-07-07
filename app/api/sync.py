@@ -2,6 +2,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
 from app.db import SessionLocal, get_db
+from app.services.daily_pipeline import run_daily_pipeline
 from app.services.misp_client import sync_misp_attributes
 from app.services.otx_source import sync_otx_to_misp
 
@@ -34,3 +35,17 @@ def _otx_job() -> None:
 def sync_otx(background_tasks: BackgroundTasks):
     background_tasks.add_task(_otx_job)
     return {"task_id": "background-otx-sync", "status": "queued"}
+
+
+def _pipeline_job() -> None:
+    db = SessionLocal()
+    try:
+        run_daily_pipeline(db)
+    finally:
+        db.close()
+
+
+@router.post("/pipeline/run")
+def pipeline_run(background_tasks: BackgroundTasks):
+    background_tasks.add_task(_pipeline_job)
+    return {"task_id": "background-daily-pipeline", "status": "queued"}

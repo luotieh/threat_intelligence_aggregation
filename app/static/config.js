@@ -19,6 +19,8 @@ const fields = [
   "llm_base_url",
   "llm_api_key",
   "llm_model",
+  "pipeline_target",
+  "pipeline_max_enrich",
 ];
 
 function show(data) {
@@ -188,6 +190,22 @@ $("gen-narrative").onclick = async () => {
     st.textContent = `叙述生成: ${r.generated ?? 0} 条(失败 ${r.failed ?? 0})` + (r.reason ? ` — ${r.reason}` : "") + (r.error ? ` — ${r.error}` : "");
     show(r);
   } catch (e) { st.textContent = "生成失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
+};
+$("save-pipeline").onclick = async () => {
+  const st = $("pipeline_status");
+  st.textContent = "保存中…";
+  try {
+    await api("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(collectConfig()) });
+    await loadConfig();
+    st.textContent = "✓ 流水线配置已保存";
+  } catch (e) { st.textContent = "✗ 保存失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
+};
+$("run-pipeline").onclick = async () => {
+  const st = $("pipeline_status");
+  st.textContent = "流水线已在后台运行(拉取 → 富化 → LLM → 推送,可能数分钟)。稍后查看每日 Top / 推送状态。";
+  try {
+    show(await api("/pipeline/run", { method: "POST" }));
+  } catch (e) { st.textContent = "启动失败: " + (typeof e === "string" ? e : JSON.stringify(e)); show(e); }
 };
 
 loadConfig().catch(show);

@@ -25,3 +25,5 @@ class ConfigPayload(BaseModel):
     llm_base_url: str | None = None
     llm_api_key: str | None = None
     llm_model: str | None = None
+    pipeline_target: int | None = Field(default=None, ge=1)
+    pipeline_max_enrich: int | None = Field(default=None, ge=1)
