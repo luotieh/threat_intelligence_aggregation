@@ -322,13 +322,18 @@
             <div class="card">
               <h2>精选高危流量情报</h2>
               <p class="desc">当前落地推送的精选情报 —— 每条经 WhoisXML 双源确认、带证据与自然语言描述。</p>
-              <div class="card-row" style="max-width:520px">
+              <div class="card-row" style="max-width:760px">
                 <label>每源条数 <input id="top_preview_n" type="number" min="0" value="10"></label>
                 <label>最低危险度
                   <select id="top_preview_sev"><option value="high">high</option><option value="medium">medium</option><option value="low">low</option></select>
                 </label>
+                <label>起始日期 <input id="top_date_from" type="date"></label>
+                <label>结束日期 <input id="top_date_to" type="date"></label>
               </div>
-              <div class="actions"><button class="btn" id="load-top">刷新列表</button></div>
+              <div class="actions">
+                <button class="btn" id="load-top">刷新列表</button>
+                <button class="ghost btn" id="clear-date">清除日期</button>
+              </div>
               <div class="muted" id="top_meta" style="margin:14px 0 8px"></div>
               <div id="top_table"></div>
             </div>
@@ -338,6 +343,6 @@
       </div>
     </div>
     <div id="toast"></div>
-    <script src="/static/config.js?v=20260707j"></script>
+    <script src="/static/config.js?v=20260707k"></script>
   </body>
 </html>

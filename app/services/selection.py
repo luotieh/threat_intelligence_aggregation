@@ -30,21 +30,24 @@ def _rank_key(indicator: IntelIndicator) -> tuple[int, float]:
     return (confidence, last_seen)
 
 
-def select_top_per_source(db: Session, top_n: int, min_severity: str) -> list[dict]:
+def select_top_per_source(db: Session, top_n: int, min_severity: str,
+                          date_from=None, date_to=None) -> list[dict]:
     """按源分组精选流量侧高危 IOC,每源取前 top_n 条(top_n<=0 表示不截断)。
 
+    date_from/date_to(datetime,可选)按 last_seen 过滤:[date_from, date_to)。
     返回 [{"source": str, "items": list[IntelIndicator]}, ...],分组按 source 名升序。
     """
     allowed = SEVERITY_TIERS.get(min_severity, SEVERITY_TIERS["high"])
-    rows = (
-        db.query(IntelIndicator)
-        .filter(
-            IntelIndicator.platform_category == "traffic",
-            IntelIndicator.to_ids.is_(True),
-            IntelIndicator.severity.in_(sorted(allowed)),
-        )
-        .all()
+    query = db.query(IntelIndicator).filter(
+        IntelIndicator.platform_category == "traffic",
+        IntelIndicator.to_ids.is_(True),
+        IntelIndicator.severity.in_(sorted(allowed)),
     )
+    if date_from is not None:
+        query = query.filter(IntelIndicator.last_seen >= date_from)
+    if date_to is not None:
+        query = query.filter(IntelIndicator.last_seen < date_to)
+    rows = query.all()
     groups: dict[str, list[IntelIndicator]] = {}
     for row in rows:
         groups.setdefault(indicator_source(row), []).append(row)

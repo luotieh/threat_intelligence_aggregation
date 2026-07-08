@@ -142,17 +142,23 @@ function renderTop(resp) {
         `<td>${sev}</td><td>${esc(item.confidence ?? "")}</td><td>${wx}</td><td class="narr">${narr}</td></tr>`);
     }
   }
-  $("top_meta").textContent = `共 ${rows.length} 条 · 最低危险度 ${resp.min_severity} · 每源上限 ${resp.top_per_source}`;
+  const dr = (resp.date_from || resp.date_to) ? ` · 日期 ${resp.date_from || "…"} ~ ${resp.date_to || "…"}` : "";
+  $("top_meta").textContent = `共 ${rows.length} 条 · 最低危险度 ${resp.min_severity} · 每源上限 ${resp.top_per_source}${dr}`;
   $("top_table").innerHTML = `<div class="table-wrap"><table><thead><tr><th>源</th><th>IOC</th><th>类型</th>` +
     `<th>危险度</th><th>置信</th><th>WhoisXML</th><th>LLM 描述</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
 }
 async function loadTop() {
   const n = $("top_preview_n").value || 10;
   const sev = $("top_preview_sev").value || "high";
-  try { renderTop(await api(`/indicators/top?top_per_source=${n}&min_severity=${sev}`)); }
+  let url = `/indicators/top?top_per_source=${n}&min_severity=${sev}`;
+  const df = $("top_date_from").value, dt = $("top_date_to").value;
+  if (df) url += `&date_from=${df}`;
+  if (dt) url += `&date_to=${dt}`;
+  try { renderTop(await api(url)); }
   catch (e) { toast(e, "err"); show(e); }
 }
 $("load-top").onclick = loadTop;
+$("clear-date").onclick = () => { $("top_date_from").value = ""; $("top_date_to").value = ""; loadTop(); };
 
 // ---- 情报源 ----
 $("save-sources").onclick = () => saveConfig("sources_status", "情报源 Key 已保存(密文,回显 masked)");

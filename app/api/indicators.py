@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.db import get_db
 from app.models import IntelIndicator
@@ -71,10 +71,21 @@ def list_indicators(
     return {"items": [serialize(row) for row in rows], "limit": limit, "offset": offset}
 
 
+def _parse_top_date(value: str | None):
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="invalid date, expected YYYY-MM-DD") from exc
+
+
 @router.get("/indicators/top")
 def top_indicators(
     top_per_source: int | None = None,
     min_severity: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     db: Session = Depends(get_db),
 ):
     s = get_effective_settings(db)
@@ -82,11 +93,16 @@ def top_indicators(
     sev = s.ta_node_min_severity if min_severity is None else min_severity
     if sev not in SEVERITY_TIERS:
         raise HTTPException(status_code=422, detail="invalid min_severity")
-    groups = select_top_per_source(db, top_n, sev)
+    df = _parse_top_date(date_from)
+    dt = _parse_top_date(date_to)
+    dt_excl = dt + timedelta(days=1) if dt else None  # date_to 含当天
+    groups = select_top_per_source(db, top_n, sev, date_from=df, date_to=dt_excl)
     return {
         "generated_at": int(datetime.now(timezone.utc).timestamp()),
         "top_per_source": top_n,
         "min_severity": sev,
+        "date_from": date_from,
+        "date_to": date_to,
         "sources": [
             {"source": g["source"], "count": len(g["items"]),
              "items": [serialize(row) for row in g["items"]]}

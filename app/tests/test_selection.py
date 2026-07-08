@@ -63,3 +63,15 @@ def test_select_medium_tier_includes_high_and_medium(db, make_indicator):
     groups = select_top_per_source(db, top_n=10, min_severity="medium")
     assert len(groups[0]["items"]) == 2
     assert SEVERITY_TIERS["medium"] == {"high", "medium"}
+
+
+def test_select_date_range_filter(db, make_indicator):
+    from datetime import datetime, timezone
+    db.add(make_indicator(value="old.com", normalized_value="old.com", tags=[{"name": "source:otx"}],
+                          last_seen=datetime(2026, 1, 1, tzinfo=timezone.utc)))
+    db.add(make_indicator(value="new.com", normalized_value="new.com", tags=[{"name": "source:otx"}],
+                          last_seen=datetime(2026, 7, 1, tzinfo=timezone.utc)))
+    db.commit()
+    groups = select_top_per_source(db, 10, "high", date_from=datetime(2026, 6, 1, tzinfo=timezone.utc))
+    values = [i.value for g in groups for i in g["items"]]
+    assert values == ["new.com"]
