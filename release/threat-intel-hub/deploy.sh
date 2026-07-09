@@ -22,9 +22,14 @@ mkdir -p "$IOC_DIR"
 # 1. 自定义网络(容器按名字互相解析,postgres/redis 必须是这两个名字,与 .env 中主机名一致)
 docker network inspect "$NET" >/dev/null 2>&1 || docker network create "$NET"
 
-# 2. 构建应用镜像(需能 pip install;离线机请提前 docker load 好基础镜像)
-echo "[*] 构建镜像 $IMAGE ..."
-docker build -t "$IMAGE" .
+# 2. 应用镜像: 已存在则跳过构建(离线部署: 先 docker load 好镜像再跑本脚本)
+#    强制重建: FORCE_BUILD=1 ./deploy.sh
+if [ "${FORCE_BUILD:-0}" != "1" ] && docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "[*] 已存在镜像 $IMAGE,跳过构建(离线模式)。如需重建: FORCE_BUILD=1 ./deploy.sh"
+else
+  echo "[*] 构建镜像 $IMAGE (需能联网 pip install)..."
+  docker build -t "$IMAGE" .
+fi
 
 # 3. 依赖组件: postgres / redis
 echo "[*] 启动 postgres / redis ..."
