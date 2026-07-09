@@ -1,3 +1,5 @@
+version: "3.3"
+
 services:
   api:
     build: .
@@ -9,6 +11,7 @@ services:
       - redis
     volumes:
       - ./release:/app/release
+      - /data/ftp/ioc:/data/ftp/ioc
 
   worker:
     build: .

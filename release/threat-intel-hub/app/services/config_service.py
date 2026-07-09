@@ -16,6 +16,8 @@ API_TO_ENV = {
     "ta_node_token": "TA_NODE_TOKEN",
     "ta_node_source_name": "TA_NODE_SOURCE_NAME",
     "ta_node_push_interval_seconds": "TA_NODE_PUSH_INTERVAL_SECONDS",
+    "ioc_output_dir": "IOC_OUTPUT_DIR",
+    "ioc_rule_filename": "IOC_RULE_FILENAME",
 }
 
 
@@ -63,6 +65,8 @@ def public_config(db: Session) -> dict:
         "ta_node_token_masked": bool(s.ta_node_token),
         "ta_node_source_name": s.ta_node_source_name,
         "ta_node_push_interval_seconds": s.ta_node_push_interval_seconds,
+        "ioc_output_dir": s.ioc_output_dir,
+        "ioc_rule_filename": s.ioc_rule_filename,
         "defaults": {
             "misp_verify_cert": parse_bool(DEFAULTS["MISP_VERIFY_CERT"]),
             "ta_node_enabled": parse_bool(DEFAULTS["TA_NODE_ENABLED"]),

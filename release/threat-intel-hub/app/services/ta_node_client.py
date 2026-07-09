@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import zipfile
 from datetime import datetime, timezone
-from typing import Iterable
+from pathlib import Path
 
-import httpx
+import yaml
 from sqlalchemy.orm import Session
 
 from app.models import IntelIndicator, SyncState
@@ -41,7 +42,13 @@ def map_indicator_to_ta_node_item(indicator: IntelIndicator) -> dict:
         "value": value,
         "category": derive_category(indicator),
         "severity": indicator.severity or "medium",
+        "source": "",
+        "description": "",
+        "tags": tag_names(indicator),
         "enabled": bool(indicator.to_ids and indicator.platform_category == "traffic"),
+        "created_at": _timestamp(indicator.created_at),
+        "updated_at": _timestamp(indicator.updated_at or indicator.last_seen),
+        **({"expire_at": _timestamp(indicator.valid_until)} if indicator.valid_until else {}),
     }
 
 
@@ -54,7 +61,23 @@ def derive_category(indicator: IntelIndicator) -> str:
     return (indicator.misp_category or "misp").lower().replace(" ", "_")
 
 
+def tag_names(indicator: IntelIndicator) -> list[str]:
+    values = []
+    for tag in indicator.tags or []:
+        if isinstance(tag, dict):
+            name = tag.get("name")
+        else:
+            name = str(tag)
+        if name:
+            values.append(name)
+    return values
+
+
 def push_traffic_to_ta_node(db: Session, mode: str = "incremental", batch_size: int = 5000) -> dict:
+    return generate_ta_node_ioc_package(db, mode=mode, batch_size=batch_size)
+
+
+def generate_ta_node_ioc_package(db: Session, mode: str = "incremental", batch_size: int = 5000) -> dict:
     s = get_effective_settings(db)
     state = _state(db)
     if not s.ta_node_enabled:
@@ -70,19 +93,20 @@ def push_traffic_to_ta_node(db: Session, mode: str = "incremental", batch_size: 
     if mode != "full":
         query = query.filter(IntelIndicator.pushed_to_ta_node.is_(False))
     indicators = query.limit(batch_size).all()
-    items = [map_indicator_to_ta_node_item(indicator) for indicator in indicators]
-    headers = {"Content-Type": "application/json"}
-    if s.ta_node_token:
-        headers["Authorization"] = f"Bearer {s.ta_node_token}"
+    now = datetime.now(timezone.utc)
+    items = []
+    for indicator in indicators:
+        item = map_indicator_to_ta_node_item(indicator)
+        item["source"] = s.ta_node_source_name
+        item["description"] = f"MISP {indicator.misp_type} IOC from Threat Intel Hub"
+        item.setdefault("created_at", int(now.timestamp()))
+        item["updated_at"] = int(now.timestamp())
+        items.append(item)
 
+    rule_path = _safe_rule_path(Path(s.ioc_output_dir), s.ioc_rule_filename)
+    zip_path = rule_path.with_suffix(".zip")
     try:
-        with httpx.Client(timeout=20) as client:
-            response = client.post(
-                f"{s.ta_node_base_url}/api/v1/intel/sync-source",
-                headers=headers,
-                json={"source": s.ta_node_source_name, "items": items},
-            )
-            response.raise_for_status()
+        write_ta_node_ioc_files(rule_path, items)
     except Exception as exc:
         message = str(exc)
         for indicator in indicators:
@@ -92,7 +116,6 @@ def push_traffic_to_ta_node(db: Session, mode: str = "incremental", batch_size: 
         db.commit()
         return {"status": "failed", "error": message, "count": len(items)}
 
-    now = datetime.now(timezone.utc)
     for indicator in indicators:
         indicator.pushed_to_ta_node = True
         indicator.pushed_at = now
@@ -101,7 +124,54 @@ def push_traffic_to_ta_node(db: Session, mode: str = "incremental", batch_size: 
     state.error_message = None
     state.last_success_at = now
     db.commit()
-    return {"status": "success", "count": len(items)}
+    return {
+        "status": "success",
+        "count": len(items),
+        "rule_file": str(rule_path),
+        "zip_file": str(zip_path),
+        "format": "ta_node intel.yaml",
+    }
+
+
+def write_ta_node_ioc_files(rule_path: Path, items: list[dict]) -> None:
+    rule_path.parent.mkdir(parents=True, exist_ok=True)
+    data = yaml.safe_dump({"items": items}, sort_keys=False, allow_unicode=True)
+    rule_path.write_text(data, encoding="utf-8")
+    zip_path = rule_path.with_suffix(".zip")
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.write(rule_path, arcname=rule_path.name)
+
+
+def save_uploaded_ioc_rule(output_dir: str, filename: str, content: bytes) -> dict:
+    rule_path = _safe_rule_path(Path(output_dir), filename)
+    rule_path.parent.mkdir(parents=True, exist_ok=True)
+    if rule_path.suffix.lower() in {".yaml", ".yml"}:
+        validate_ta_node_yaml(content)
+    rule_path.write_bytes(content)
+    zip_path = rule_path if rule_path.suffix.lower() == ".zip" else rule_path.with_suffix(".zip")
+    if rule_path.suffix.lower() != ".zip":
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.write(rule_path, arcname=rule_path.name)
+    return {"status": "saved", "rule_file": str(rule_path), "zip_file": str(zip_path)}
+
+
+def validate_ta_node_yaml(content: bytes) -> None:
+    parsed = yaml.safe_load(content) or {}
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("items"), list):
+        raise ValueError("ta_node rule file must be YAML with top-level items list")
+    for index, item in enumerate(parsed["items"]):
+        if not isinstance(item, dict):
+            raise ValueError(f"items[{index}] must be an object")
+        for key in ("id", "type", "value", "category", "severity", "source", "enabled"):
+            if key not in item:
+                raise ValueError(f"items[{index}] missing required field: {key}")
+
+
+def _safe_rule_path(output_dir: Path, filename: str) -> Path:
+    name = Path(filename or "intel.yaml").name
+    if not name:
+        name = "intel.yaml"
+    return output_dir / name
 
 
 def pending_and_pushed_counts(db: Session) -> tuple[int, int]:
@@ -120,3 +190,11 @@ def _state(db: Session) -> SyncState:
         state = SyncState(source_name="ta_node_push")
         db.add(state)
     return state
+
+
+def _timestamp(value) -> int:
+    if value is None:
+        return int(datetime.now(timezone.utc).timestamp())
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return int(value.timestamp())

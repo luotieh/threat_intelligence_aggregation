@@ -40,18 +40,26 @@
         </div>
       </section>
       <section>
-        <h2>ta_node 配置</h2>
+        <h2>ta_node 规则文件</h2>
         <div class="grid">
-          <label>Enable Push <input id="ta_node_enabled" type="checkbox"></label>
-          <label>Base URL <input id="ta_node_base_url" autocomplete="off"></label>
-          <label>Token <input id="ta_node_token" type="password" placeholder="******"></label>
+          <label>Enable Generate <input id="ta_node_enabled" type="checkbox"></label>
           <label>Source Name <input id="ta_node_source_name"></label>
-          <label>Push Interval Seconds <input id="ta_node_push_interval_seconds" type="number" min="10"></label>
+          <label>Generate Interval Seconds <input id="ta_node_push_interval_seconds" type="number" min="10"></label>
+          <label>Output Directory <input id="ioc_output_dir" autocomplete="off"></label>
+          <label>Rule Filename <input id="ioc_rule_filename" autocomplete="off"></label>
         </div>
         <div class="actions">
-          <button id="test-ta" class="secondary">测试 ta_node</button>
-          <button id="push-full" class="secondary">全量推送</button>
-          <button id="push-inc" class="secondary">增量推送</button>
+          <button id="push-full" class="secondary">生成全量规则包</button>
+          <button id="push-inc" class="secondary">生成增量规则包</button>
+        </div>
+      </section>
+      <section>
+        <h2>手动上传规则文件</h2>
+        <div class="grid">
+          <label>ta_node intel.yaml / zip <input id="ioc_upload_file" type="file" accept=".yaml,.yml,.zip,application/zip,text/yaml,text/plain"></label>
+        </div>
+        <div class="actions">
+          <button id="upload-ioc" class="secondary">上传到网闸目录</button>
         </div>
       </section>
       <section>

@@ -17,7 +17,9 @@ def test_download_latest_release(db, tmp_path):
     assert response.path == path
 
 
-def test_download_missing_file_returns_404(db):
+def test_download_missing_file_returns_404(db, tmp_path):
+    db.add(AppConfig(key="EXPORT_DIR", value=str(tmp_path)))
+    db.commit()
     with pytest.raises(HTTPException) as exc:
         download_file("threat-intel-hub.zip", db)
     assert exc.value.status_code == 404

@@ -9,6 +9,8 @@ const fields = [
   "ta_node_token",
   "ta_node_source_name",
   "ta_node_push_interval_seconds",
+  "ioc_output_dir",
+  "ioc_rule_filename",
 ];
 
 function show(data) {
@@ -50,18 +52,27 @@ $("save").onclick = async () => show(await api("/api/config", {
   body: JSON.stringify(collectConfig()),
 }));
 $("test-misp").onclick = async () => show(await api("/health/misp"));
-$("test-ta").onclick = async () => show(await api("/health/ta-node"));
 $("sync-misp").onclick = async () => show(await api("/sync/misp", { method: "POST" }));
-$("push-full").onclick = async () => show(await api("/push/ta-node", {
+$("push-full").onclick = async () => show(await api("/ioc-rules/generate", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ mode: "full" }),
 }));
-$("push-inc").onclick = async () => show(await api("/push/ta-node", {
+$("push-inc").onclick = async () => show(await api("/ioc-rules/generate", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({ mode: "incremental" }),
 }));
 $("push-status").onclick = async () => show(await api("/push/ta-node/status"));
+$("upload-ioc").onclick = async () => {
+  const file = $("ioc_upload_file").files[0];
+  if (!file) {
+    show("请选择 ta_node intel.yaml 或同名 zip 文件");
+    return;
+  }
+  const body = new FormData();
+  body.append("file", file);
+  show(await api("/ioc-rules/upload", { method: "POST", body }));
+};
 
 loadConfig().catch(show);

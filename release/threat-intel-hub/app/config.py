@@ -20,6 +20,8 @@ DEFAULTS: dict[str, str] = {
     "TA_NODE_SOURCE_NAME": "Threat Intel Hub",
     "TA_NODE_PUSH_INTERVAL_SECONDS": "600",
     "EXPORT_DIR": "release",
+    "IOC_OUTPUT_DIR": "/data/ftp/ioc",
+    "IOC_RULE_FILENAME": "intel.yaml",
 }
 
 ENV_KEYS = set(DEFAULTS)
@@ -49,6 +51,8 @@ class Settings:
     ta_node_source_name: str
     ta_node_push_interval_seconds: int
     export_dir: str
+    ioc_output_dir: str
+    ioc_rule_filename: str
 
 
 def value_for(key: str, db_values: dict[str, str] | None = None) -> str:
@@ -76,6 +80,8 @@ def settings_from_values(db_values: dict[str, str] | None = None) -> Settings:
         ta_node_source_name=value_for("TA_NODE_SOURCE_NAME", db_values),
         ta_node_push_interval_seconds=int(value_for("TA_NODE_PUSH_INTERVAL_SECONDS", db_values)),
         export_dir=value_for("EXPORT_DIR", db_values),
+        ioc_output_dir=value_for("IOC_OUTPUT_DIR", db_values),
+        ioc_rule_filename=value_for("IOC_RULE_FILENAME", db_values),
     )
 
 

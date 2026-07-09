@@ -11,3 +11,5 @@ class ConfigPayload(BaseModel):
     ta_node_token: str | None = None
     ta_node_source_name: str | None = None
     ta_node_push_interval_seconds: int | None = Field(default=None, ge=10)
+    ioc_output_dir: str | None = None
+    ioc_rule_filename: str | None = None

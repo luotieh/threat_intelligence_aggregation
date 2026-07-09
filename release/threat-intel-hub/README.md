@@ -1,6 +1,6 @@
 # Threat Intel Hub
 
-Threat Intel Hub 是一个基于 MISP 的威胁情报聚合服务，用于同步 MISP IOC、标准化并分类为 `traffic` / `other`，再把可用于流量检测的 `traffic` IOC 推送到 `ta_node`。
+Threat Intel Hub 是一个基于 MISP 的威胁情报聚合服务，用于同步 MISP IOC、标准化并分类为 `traffic` / `other`，再把可用于流量检测的 `traffic` IOC 生成 `ta_node` 可加载的规则文件包。
 
 ## 架构图
 
@@ -31,8 +31,10 @@ http://127.0.0.1:18080/config
 - `DATABASE_URL`: PostgreSQL 连接串。
 - `REDIS_URL`: Celery broker/backend。
 - `MISP_URL`, `MISP_API_KEY`, `MISP_VERIFY_CERT`, `MISP_SYNC_INTERVAL_SECONDS`: MISP 同步配置。
-- `TA_NODE_ENABLED`, `TA_NODE_BASE_URL`, `TA_NODE_TOKEN`, `TA_NODE_SOURCE_NAME`, `TA_NODE_PUSH_INTERVAL_SECONDS`: ta_node 推送配置。
+- `TA_NODE_ENABLED`, `TA_NODE_SOURCE_NAME`, `TA_NODE_PUSH_INTERVAL_SECONDS`: ta_node 规则文件生成配置。
 - `EXPORT_DIR`: release 包和 IOC 导出文件目录。
+- `IOC_OUTPUT_DIR`: 规则文件输出目录，默认 `/data/ftp/ioc`。
+- `IOC_RULE_FILENAME`: ta_node 规则文件名，默认 `intel.yaml`，会同时生成同名 `intel.zip`。
 
 配置优先级为：环境变量 > 数据库配置 > 默认配置。
 
@@ -50,23 +52,45 @@ curl -X POST http://127.0.0.1:18080/sync/misp
 
 同步逻辑读取上次 `sync_state`，首次默认同步最近 24 小时，搜索 published/to_ids attributes，标准化后写入 `intel_indicator`。同步失败会记录状态，不会删除本地 IOC。
 
-## ta_node 推送说明
+## ta_node 规则文件说明
 
-健康检查：
+Threat Intel Hub 不直接调用 ta_node。它会生成 ta_node `intel.yaml` 格式的规则文件，并压缩为同名 zip，默认保存到 `/data/ftp/ioc`，由网闸同步到内网。
 
-```bash
-curl http://127.0.0.1:18080/health/ta-node
+文件格式与 `ta_node` 的 `configs/intel.yaml` 一致：
+
+```yaml
+items:
+  - id: "misp-attribute-uuid"
+    type: "domain"
+    value: "evil.example.com"
+    category: "c2"
+    severity: "high"
+    source: "Threat Intel Hub"
+    description: "MISP domain IOC from Threat Intel Hub"
+    tags: ["tlp:white", "c2"]
+    enabled: true
+    created_at: 1710000000
+    updated_at: 1710000000
 ```
 
-手动推送：
+手动生成：
 
 ```bash
-curl -X POST http://127.0.0.1:18080/push/ta-node \
+curl -X POST http://127.0.0.1:18080/ioc-rules/generate \
   -H 'Content-Type: application/json' \
   -d '{"mode":"full"}'
 ```
 
-推送接口为 `POST {TA_NODE_BASE_URL}/api/v1/intel/sync-source`。`TA_NODE_TOKEN` 为空时不发送 Authorization 头。
+兼容入口 `/push/ta-node` 仍可用，但现在只排队生成规则包，不再发送 HTTP 请求到 ta_node。
+
+手动上传已有规则文件：
+
+```bash
+curl -X POST http://127.0.0.1:18080/ioc-rules/upload \
+  -F 'file=@intel.yaml'
+```
+
+上传 `.yaml` / `.yml` 时会校验顶层 `items` 列表和 ta_node 必需字段，然后生成同名 zip；上传 `.zip` 时直接保存到网闸目录。
 
 ## 下载导出说明
 
@@ -97,6 +121,8 @@ curl -O http://127.0.0.1:18080/downloads/latest
 - `POST /sync/misp`
 - `POST /push/ta-node`
 - `GET /push/ta-node/status`
+- `POST /ioc-rules/generate`
+- `POST /ioc-rules/upload`
 - `GET /exports/traffic?format=json|csv|txt`
 - `GET /downloads/latest`
 - `GET /downloads/{filename}`
@@ -110,7 +136,7 @@ curl -O http://127.0.0.1:18080/downloads/latest
 
 `/health/ta-node` 失败：确认 `TA_NODE_BASE_URL` 可从容器内访问。Linux 宿主机服务通常需要使用宿主机网关地址，而不是容器内的 `127.0.0.1`。
 
-推送后没有 IOC：确认 IOC 为 `platform_category=traffic` 且 `to_ids=true`。增量推送只推送未成功推送过的 IOC，全量推送使用 `{"mode":"full"}`。
+生成后没有 IOC：确认 IOC 为 `platform_category=traffic` 且 `to_ids=true`。增量生成只包含未成功生成过的 IOC，全量生成使用 `{"mode":"full"}`。
 
 ## 测试
 

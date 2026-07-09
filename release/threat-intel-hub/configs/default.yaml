@@ -12,3 +12,6 @@ ta_node:
   push_interval_seconds: 600
 export:
   dir: /app/release
+ioc:
+  output_dir: /data/ftp/ioc
+  rule_filename: intel.yaml
