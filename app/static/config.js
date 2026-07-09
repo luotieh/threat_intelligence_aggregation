@@ -1,5 +1,10 @@
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmtTime = (iso) => {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? esc(iso) : d.toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+};
 
 const fields = [
   "ta_node_enabled", "ta_node_source_name", "ta_node_push_interval_seconds",
@@ -139,13 +144,14 @@ function renderTop(resp) {
       const sev = `<span class="sev ${esc(item.severity)}">${esc(item.severity)}</span>`;
       const narr = item.narrative ? esc(item.narrative) : '<span class="muted">—</span>';
       rows.push(`<tr><td>${esc(src.source)}</td><td class="mono">${esc(item.value)}</td><td>${esc(item.misp_type)}</td>` +
-        `<td>${sev}</td><td>${esc(item.confidence ?? "")}</td><td>${wx}</td><td class="narr">${narr}</td></tr>`);
+        `<td>${sev}</td><td>${esc(item.confidence ?? "")}</td><td>${wx}</td><td class="narr">${narr}</td>` +
+        `<td class="mono">${fmtTime(item.created_at)}</td></tr>`);
     }
   }
   const dr = (resp.date_from || resp.date_to) ? ` · 日期 ${resp.date_from || "…"} ~ ${resp.date_to || "…"}` : "";
   $("top_meta").textContent = `共 ${rows.length} 条 · 最低危险度 ${resp.min_severity} · 每源上限 ${resp.top_per_source}${dr}`;
   $("top_table").innerHTML = `<div class="table-wrap"><table><thead><tr><th>源</th><th>IOC</th><th>类型</th>` +
-    `<th>危险度</th><th>置信</th><th>WhoisXML</th><th>LLM 描述</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+    `<th>危险度</th><th>置信</th><th>WhoisXML</th><th>LLM 描述</th><th>获取时间</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
 }
 async function loadTop() {
   const n = $("top_preview_n").value || 10;

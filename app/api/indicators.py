@@ -40,6 +40,7 @@ def serialize(row: IntelIndicator) -> dict:
         "pushed_to_ta_node": row.pushed_to_ta_node,
         "push_error": row.push_error,
         "last_seen": row.last_seen.isoformat() if row.last_seen else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
         "whoisxml": _whoisxml_summary(row.raw),
         "narrative": (row.raw or {}).get("narrative"),
     }

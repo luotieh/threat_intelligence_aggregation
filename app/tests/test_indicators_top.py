@@ -15,6 +15,7 @@ def test_top_groups_by_source(db, make_indicator):
     assert set(sources) == {"otx", "whoisxml"}
     assert sources["otx"]["count"] == 1
     assert sources["otx"]["items"][0]["confidence"] == 90
+    assert "created_at" in sources["otx"]["items"][0]
 
 
 def test_top_invalid_severity_raises_422(db):
