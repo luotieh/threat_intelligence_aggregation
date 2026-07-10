@@ -101,14 +101,23 @@ def sync_otx_direct(db: Session, max_pulses: int | None = None) -> dict:
         datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S")
     run_started = datetime.now(timezone.utc)
     imported = filtered = 0
+    # OTX 同一 pulse 偶发返回重复 indicator(相同 id → 相同 uuid);SessionLocal 关了
+    # autoflush,upsert 的按 uuid 去重看不到本批次 pending 行,重复 uuid 会一起进 flush
+    # 批次并撞唯一约束 intel_indicator_misp_attribute_uuid_key。故在此按 uuid 批内去重。
+    seen: set[str] = set()
     try:
         for pulse in fetch_pulses(s.otx_api_key, since, max_pulses):
             for attr in pulse_to_attributes(pulse):
+                uid = attr.get("uuid")
+                if uid and uid in seen:
+                    continue
                 ntype, nval = normalize_value(attr["type"], attr["value"])
                 if is_benign(ntype, nval):
                     filtered += 1
                     continue
                 upsert_indicator(db, attr)
+                if uid:
+                    seen.add(uid)
                 imported += 1
         state.last_timestamp = run_started.strftime("%Y-%m-%dT%H:%M:%S")
         state.last_success_at = run_started
@@ -117,6 +126,10 @@ def sync_otx_direct(db: Session, max_pulses: int | None = None) -> dict:
         db.commit()
         return {"status": "success", "imported": imported, "filtered_benign": filtered}
     except Exception as exc:  # noqa: BLE001
+        # 先回滚清掉中毒事务,否则后续(如 daily_pipeline 的查询)会连锁抛
+        # PendingRollbackError,拖垮整条流水线。rollback 后重取 state 再记错。
+        db.rollback()
+        state = _otx_state(db)
         state.status = "failed"
         state.error_message = str(exc)
         db.commit()

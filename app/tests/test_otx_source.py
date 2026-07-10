@@ -37,3 +37,18 @@ def test_sync_direct_imports_and_filters_benign(db, monkeypatch):
     ind = db.query(IntelIndicator).first()
     assert ind.value == "evil.com"
     assert any(t.get("name") == "source:otx" for t in ind.tags)
+
+
+def test_sync_direct_dedupes_duplicate_uuids(db, monkeypatch):
+    """OTX 同一 pulse 内重复 indicator(相同 id→相同 uuid)不得撞唯一约束。"""
+    db.add(AppConfig(key="OTX_API_KEY", value="k"))
+    db.commit()
+    pulses = [{"id": "p1", "name": "A", "indicators": [
+        {"type": "domain", "indicator": "evil.com", "id": 42},
+        {"type": "domain", "indicator": "evil.com", "id": 42},   # 同 id → 同 uuid,重复
+    ]}]
+    monkeypatch.setattr(otx_source, "fetch_pulses", lambda key, since, mx: iter(pulses))
+    result = sync_otx_direct(db)
+    assert result["status"] == "success"
+    assert result["imported"] == 1
+    assert db.query(IntelIndicator).count() == 1
