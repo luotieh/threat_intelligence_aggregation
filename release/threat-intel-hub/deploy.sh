@@ -4,16 +4,22 @@
 # 用法: 在解压后的 release/threat-intel-hub 目录下执行 ./deploy.sh
 set -euo pipefail
 
-NET=intel-net
-IMAGE=threat-intel-hub:latest
-PG_IMAGE=postgres:16-alpine
-REDIS_IMAGE=redis:7-alpine
-IOC_DIR=/data/ftp/ioc
-# api 对外端口(默认 18080)。换端口: API_PORT=28080 ./deploy.sh
-# 注意: 勿用被占端口(如 22128 已被 xray 占用)
-API_PORT="${API_PORT:-18080}"
-
 cd "$(dirname "$0")"
+
+# 可变参数集中放 deploy.conf(与本脚本同目录),改端口/镜像等只改那个文件,
+# 不必改脚本、也不必重新打包镜像。参数模板见 deploy.conf.example。
+# 优先级: deploy.conf 中写明的项 > 环境变量 > 下方默认值
+#         (在 conf 中注释掉的项,则回落到环境变量或默认值)。
+[ -f deploy.conf ] && . ./deploy.conf
+
+NET="${NET:-intel-net}"
+IMAGE="${IMAGE:-threat-intel-hub:latest}"
+PG_IMAGE="${PG_IMAGE:-postgres:16-alpine}"
+REDIS_IMAGE="${REDIS_IMAGE:-redis:7-alpine}"
+IOC_DIR="${IOC_DIR:-/data/ftp/ioc}"
+API_PORT="${API_PORT:-18080}"       # api 对外端口(勿用被占端口,如 xray 的 22128)
+PG_PORT="${PG_PORT:-5432}"          # postgres 对外端口
+REDIS_PORT="${REDIS_PORT:-6379}"    # redis 对外端口
 
 # 0. 前置检查
 if [ ! -f .env ]; then
@@ -41,10 +47,10 @@ docker rm -f postgres redis >/dev/null 2>&1 || true
 docker run -d --name postgres --network "$NET" --restart unless-stopped \
   -e POSTGRES_DB=intel -e POSTGRES_USER=intel -e POSTGRES_PASSWORD=intel \
   -v postgres_data:/var/lib/postgresql/data \
-  -p 5432:5432 "$PG_IMAGE"
+  -p "${PG_PORT}:5432" "$PG_IMAGE"
 
 docker run -d --name redis --network "$NET" --restart unless-stopped \
-  -p 6379:6379 "$REDIS_IMAGE"
+  -p "${REDIS_PORT}:6379" "$REDIS_IMAGE"
 
 # 4. 等 postgres 就绪
 echo -n "[*] 等待 postgres 就绪 "

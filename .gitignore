@@ -1,0 +1,23 @@
+# 部署时各服务器自有参数(端口/镜像等),不进版本库;模板见 deploy.conf.example
+deploy.conf
+release/threat-intel-hub/deploy.conf
+
+# 环境与密钥
+.env
+
+# Python 缓存 / 构建产物
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# 本地测试数据库
+test_intel.db
+*.db
+
+# 运行状态
+scripts/.state/
+
+# 外部工具/子项目(非本仓库代码)
+MISP/
+misp-docker/

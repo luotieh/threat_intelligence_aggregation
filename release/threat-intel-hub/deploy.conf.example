@@ -1,0 +1,16 @@
+# 部署参数文件(deploy.sh 会自动读取同目录的 deploy.conf)
+# 用法: cp deploy.conf.example deploy.conf,按需修改后运行 ./deploy.sh
+# 改这里的值无需改脚本、也无需重新打包/重传镜像。
+# 优先级: 本文件中写明(未注释)的项 > 环境变量 > 脚本内默认值。
+
+# ── 对外端口 ──
+API_PORT=22129        # 情报应用对外端口(勿用被占端口,如 xray 的 22128)
+# PG_PORT=5432        # postgres 对外端口
+# REDIS_PORT=6379     # redis 对外端口
+
+# ── 镜像 / 目录 ──
+# IMAGE=threat-intel-hub:latest
+# PG_IMAGE=postgres:16-alpine
+# REDIS_IMAGE=redis:7-alpine
+# IOC_DIR=/data/ftp/ioc   # IOC 规则文件(intel.yaml)输出目录
+# NET=intel-net
