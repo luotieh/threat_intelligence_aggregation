@@ -9,6 +9,9 @@ IMAGE=threat-intel-hub:latest
 PG_IMAGE=postgres:16-alpine
 REDIS_IMAGE=redis:7-alpine
 IOC_DIR=/data/ftp/ioc
+# api 对外端口(默认 18080)。换端口: API_PORT=28080 ./deploy.sh
+# 注意: 勿用被占端口(如 22128 已被 xray 占用)
+API_PORT="${API_PORT:-18080}"
 
 cd "$(dirname "$0")"
 
@@ -57,9 +60,9 @@ done
 echo "[*] 启动 api / worker / beat ..."
 docker rm -f intel-api intel-worker intel-beat >/dev/null 2>&1 || true
 
-# api: 对外 18080,挂 release(导出包) 和 ioc 输出目录
+# api: 对外 $API_PORT,挂 release(导出包) 和 ioc 输出目录
 docker run -d --name intel-api --network "$NET" --restart unless-stopped \
-  --env-file .env -p 18080:18080 \
+  --env-file .env -p "${API_PORT}:18080" \
   -v "$PWD/release:/app/release" \
   -v "$IOC_DIR:$IOC_DIR" \
   "$IMAGE"
@@ -81,8 +84,8 @@ docker run -d --name intel-beat --network "$NET" --restart unless-stopped \
 # 6. 健康检查
 echo "[*] 等待 api 启动 ..."
 sleep 4
-echo "[*] 健康检查:"
-curl -fsS http://127.0.0.1:18080/health && echo || echo "[!] health 未通过,查看: docker logs intel-api"
+echo "[*] 健康检查 (端口 $API_PORT):"
+curl -fsS "http://127.0.0.1:${API_PORT}/health" && echo || echo "[!] health 未通过,查看: docker logs intel-api"
 
 echo
 echo "部署完成。常用命令:"
