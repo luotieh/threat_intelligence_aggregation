@@ -1,9 +1,9 @@
 name: deploy-to-server
 
 # 推送到 master 自动部署到情报服务器(离线 ARM64,dockerd 无法拉基础镜像)。
-# 策略:runner 把最新 app/ 源码 scp 到服务器,基于服务器已有的稳定基座镜像
+# 策略:SSH 到服务器,git fetch 拉最新 app/ 源码,基于服务器已有的稳定基座镜像
 #       threat-intel-hub:base 叠一层(COPY app),再用 deploy.sh 重建容器。
-# 纯源码改动无需联网构建,秒级完成。
+# 不用 scp/tar(服务器 openEuler 精简版未装 tar),纯 git + docker,离线秒级。
 #
 # ⚠️ 依赖变更(pyproject.toml)不会通过本流程生效:base 镜像不含新依赖。
 #    改依赖时需在能联网的机器上重建并 docker load 出新的 threat-intel-hub:base
@@ -18,7 +18,7 @@ name: deploy-to-server
 on:
   push:
     branches: [master]
-    # 只有应用源码变化才触发部署(改文档/CI 自身不重部署)
+    # 只有应用源码变化才触发部署(改文档不重部署)
     paths:
       - "app/**"
       - ".github/workflows/deploy.yml"
@@ -32,21 +32,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Copy app source to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          port: ${{ secrets.DEPLOY_PORT }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "app"
-          target: "/tmp/ci-deploy"
-          rm: true
-
-      - name: Overlay build & redeploy
+      - name: Pull latest app, overlay build & redeploy
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -55,7 +41,8 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           command_timeout: 10m
           script: |
-            set -euo pipefail
+            set -eu
+            export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
             PROJ=/home/yt/porjects/threat-intel-hub
             REL="$PROJ/release/threat-intel-hub"
 
@@ -66,9 +53,14 @@ jobs:
               exit 1
             fi
 
-            # 用 scp 上来的最新 app/ 基于 base 叠一层(纯源码,无需联网)
+            # 拉最新 app/ 源码(只强制更新 app 目录,不动服务器上的其它本地改动)
+            cd "$PROJ"
+            git fetch origin master
+            git checkout -f origin/master -- app
+
+            # 基于 base 叠一层(纯源码,无需联网、无需 tar)
             rm -rf /tmp/overlay && mkdir -p /tmp/overlay
-            cp -r /tmp/ci-deploy/app /tmp/overlay/app
+            cp -r app /tmp/overlay/app
             printf 'FROM threat-intel-hub:base\nCOPY app ./app\n' > /tmp/overlay/Dockerfile
             docker build -t threat-intel-hub:latest /tmp/overlay
 
