@@ -120,3 +120,53 @@ def test_pipeline_url_confirmed_via_host(db, monkeypatch, tmp_path):
     # URL 应以提取出的主机名(evil.com)查 WhoisXML,而非整条 URL
     assert "evil.com" in seen
     assert "http://evil.com/malware?x=1" not in seen
+
+
+def _llm_on(db, monkeypatch, text="命中威胁研判,建议阻断并上报,叙述足够长以通过非空校验判定门槛。"):
+    from app.models import AppConfig
+    from app.services import llm as _llm
+    db.add(AppConfig(key="LLM_ENABLED", value="true"))
+    db.add(AppConfig(key="LLM_API_KEY", value="k"))
+    monkeypatch.setattr(_llm, "chat_completion", lambda *a, **k: text)
+
+
+def test_pipeline_describes_even_without_whoisxml(db, monkeypatch, tmp_path):
+    """WhoisXML 额度耗尽(全部抛错)时,仍产出 target 条并全部有 LLM 描述。"""
+    from app.models import AppConfig
+    db.add(AppConfig(key="WHOISXML_API_KEY", value="k"))
+    db.add(AppConfig(key="IOC_OUTPUT_DIR", value=str(tmp_path)))
+    for i in range(8):
+        db.add(make_ind(value=f"d{i}.com", normalized_value=f"d{i}.com", normalized_type="domain",
+                        raw={"Event": {"info": "OTX | Akira"}}))
+    db.commit()
+    _mute_io(monkeypatch); _llm_on(db, monkeypatch)
+
+    def boom(key, ioc):
+        raise RuntimeError("insufficient credits balance")
+    monkeypatch.setattr(daily_pipeline, "query_whoisxml", boom)
+    written = {}
+    monkeypatch.setattr(daily_pipeline, "write_ta_node_ioc_files",
+                        lambda path, items: written.update(items=items))
+    result = run_daily_pipeline(db, target=5, max_enrich=3)
+    assert result["confirmed"] == 0            # WhoisXML 一条没确认
+    assert result["pushed"] == 5               # 兜底仍产出 5 条
+    assert result["otx_only"] == 5
+    assert all(it["evidence"].get("narrative") for it in written["items"])  # 全部有 LLM 研判
+
+
+def test_pipeline_fallback_honors_ratio(db, monkeypatch, tmp_path):
+    from app.models import AppConfig
+    db.add(AppConfig(key="WHOISXML_API_KEY", value="k"))
+    db.add(AppConfig(key="IOC_OUTPUT_DIR", value=str(tmp_path)))
+    for i in range(8):
+        db.add(make_ind(value=f"1.1.1.{i}", normalized_value=f"1.1.1.{i}", normalized_type="ip"))
+        db.add(make_ind(value=f"d{i}.com", normalized_value=f"d{i}.com", normalized_type="domain"))
+        db.add(make_ind(value=f"http://u{i}.com/p", normalized_value=f"http://u{i}.com/p", normalized_type="url"))
+    db.commit()
+    _mute_io(monkeypatch)
+    monkeypatch.setattr(daily_pipeline, "query_whoisxml",
+                        lambda key, ioc: (_ for _ in ()).throw(RuntimeError("no credits")))
+    monkeypatch.setattr(daily_pipeline, "write_ta_node_ioc_files", lambda path, items: None)
+    result = run_daily_pipeline(db, target=10, max_enrich=2)
+    assert result["pushed_by_type"] == {"ip": 6, "domain": 2, "url": 2}
+    assert result["pushed"] == 10

@@ -63,6 +63,50 @@ def _whoisxml_query_value(indicator: IntelIndicator) -> str:
     return value
 
 
+def _total(by_type: dict[str, list]) -> int:
+    return sum(len(v) for v in by_type.values())
+
+
+def _pick_type(by_type: dict[str, list], quota: dict[str, int],
+               pools: dict[str, list], ptr: dict[str, int], target: int) -> str | None:
+    """选下一个要处理的类型:先填未满配额且有候选的(ip→url→domain),
+    再尽力而为按 domain→ip→url 补足总数。"""
+    for t in ("ip", "url", "domain"):
+        if len(by_type[t]) < quota[t] and ptr[t] < len(pools[t]):
+            return t
+    if _total(by_type) < target:
+        for t in ("domain", "ip", "url"):
+            if ptr[t] < len(pools[t]):
+                return t
+    return None
+
+
+def _fallback_fill(db: Session, by_type: dict[str, list], quota: dict[str, int], target: int) -> int:
+    """WhoisXML 无法确认时,用高危 OTX 候选(未交叉验证)按同一配额补足 target。返回补入条数。"""
+    selected = {id(i) for lst in by_type.values() for i in lst}
+    rows = (db.query(IntelIndicator)
+            .filter(IntelIndicator.severity == "high",
+                    IntelIndicator.to_ids.is_(True),
+                    IntelIndicator.normalized_type.in_(list(_CLASS_OF)))
+            .all())
+    pools: dict[str, list[IntelIndicator]] = {"ip": [], "domain": [], "url": []}
+    for r in rows:
+        if id(r) not in selected:
+            pools[_CLASS_OF[r.normalized_type]].append(r)
+    for lst in pools.values():
+        _sort_candidates(lst)
+    ptr = {"ip": 0, "domain": 0, "url": 0}
+    added = 0
+    while _total(by_type) < target:
+        t = _pick_type(by_type, quota, pools, ptr, target)
+        if t is None:
+            break
+        by_type[t].append(pools[t][ptr[t]])
+        ptr[t] += 1
+        added += 1
+    return added
+
+
 def _mark_enriched(indicator: IntelIndicator, data: dict) -> bool:
     """写入 whoisxml 结果并打 enriched 标签;返回是否为 WhoisXML 确认(有记录)。"""
     tags = list(indicator.tags or [])
@@ -96,21 +140,6 @@ def run_daily_pipeline(db: Session, target: int | None = None, max_enrich: int |
     by_type: dict[str, list[IntelIndicator]] = {"ip": [], "domain": [], "url": []}
     rounds = 0
 
-    def total() -> int:
-        return sum(len(v) for v in by_type.values())
-
-    def pick(pools: dict[str, list[IntelIndicator]], ptr: dict[str, int]) -> str | None:
-        # 1) 优先填未满配额且仍有候选的类型(先 ip、再 url,domain 留作补口)
-        for t in ("ip", "url", "domain"):
-            if len(by_type[t]) < quota[t] and ptr[t] < len(pools[t]):
-                return t
-        # 2) 尽力而为:总数未达标,用还有候选的类型补(优先 domain)
-        if total() < target:
-            for t in ("domain", "ip", "url"):
-                if ptr[t] < len(pools[t]):
-                    return t
-        return None
-
     # 先直连拉一批 OTX(去误报后入库),保证当天有新的高危候选
     try:
         sync_otx_direct(db, max_pulses=s.otx_max_pulses)
@@ -118,13 +147,13 @@ def run_daily_pipeline(db: Session, target: int | None = None, max_enrich: int |
     except Exception as exc:  # noqa: BLE001
         log["notes"].append(f"初始 OTX 拉取异常: {exc}")
 
-    while total() < target and log["enrich_attempts"] < max_enrich and rounds < MAX_ROUNDS:
+    while _total(by_type) < target and log["enrich_attempts"] < max_enrich and rounds < MAX_ROUNDS:
         rounds += 1
         pools = _candidates_by_type(db)  # 每轮重取,已富化的自动排除
         ptr = {"ip": 0, "domain": 0, "url": 0}
         progressed = False
-        while total() < target and log["enrich_attempts"] < max_enrich:
-            t = pick(pools, ptr)
+        while _total(by_type) < target and log["enrich_attempts"] < max_enrich:
+            t = _pick_type(by_type, quota, pools, ptr, target)
             if t is None:
                 break
             ind = pools[t][ptr[t]]
@@ -139,7 +168,7 @@ def run_daily_pipeline(db: Session, target: int | None = None, max_enrich: int |
                 log["enrich_attempts"] += 1
                 ind.raw = {**(ind.raw or {}), "whoisxml_error": str(exc)}
         db.commit()
-        if total() >= target or log["enrich_attempts"] >= max_enrich:
+        if _total(by_type) >= target or log["enrich_attempts"] >= max_enrich:
             break
         # 本轮候选用尽仍不足 → 补拉 OTX 再来一轮;补不出新候选就收手
         if not progressed:
@@ -149,33 +178,34 @@ def run_daily_pipeline(db: Session, target: int | None = None, max_enrich: int |
                 log["notes"].append("OTX 无更多高危候选,提前结束补足")
                 break
 
-    confirmed: list[IntelIndicator] = by_type["ip"] + by_type["domain"] + by_type["url"]
-    log["confirmed"] = len(confirmed)
+    # WhoisXML 交叉确认数(此时 by_type 里全是确认过的)
+    log["confirmed"] = _total(by_type)
     log["confirmed_by_type"] = {t: len(v) for t, v in by_type.items()}
+
+    # 兜底:确认不足 target(如 WhoisXML 额度耗尽)时,用高危 OTX 单源候选按配额补足
+    if _total(by_type) < target:
+        added = _fallback_fill(db, by_type, quota, target)
+        log["otx_only"] = added
+        if added:
+            log["notes"].append(f"WhoisXML 未确认部分用高危 OTX 单源候选补足 {added} 条")
+
+    push_set: list[IntelIndicator] = (by_type["ip"] + by_type["domain"] + by_type["url"])[:target]
+    log["pushed_by_type"] = {t: sum(1 for i in push_set if _CLASS_OF.get(i.normalized_type) == t)
+                             for t in ("ip", "domain", "url")}
     for t in ("ip", "url", "domain"):
-        if len(by_type[t]) < quota[t]:
-            log["notes"].append(f"{t} 类未凑满配额({len(by_type[t])}/{quota[t]}),缺口已由其它类型补足")
-    if log["confirmed"] < target:
-        log["notes"].append(f"达额度/候选上限,当日仅确认 {log['confirmed']}/{target} 条")
+        if log["pushed_by_type"][t] < quota[t]:
+            log["notes"].append(f"{t} 类不足配额({log['pushed_by_type'][t]}/{quota[t]}),缺口由其它类型补")
 
-    # LLM 描述(仅对确认的这批,重试补齐,保证每条有叙述)
-    if s.llm_enabled and s.llm_api_key:
-        from app.services.llm import generate_narrative
-        for ind in confirmed[:target]:
-            if not (ind.raw or {}).get("narrative"):
-                text = generate_narrative(db, ind)
-                if text:
-                    ind.raw = {**(ind.raw or {}), "narrative": text}
-                    log["narrated"] += 1
-        db.commit()
-        missing = [i for i in confirmed[:target] if not (i.raw or {}).get("narrative")]
-        if missing:
-            log["notes"].append(f"{len(missing)} 条 LLM 描述重试后仍失败")
-    else:
+    # LLM 描述:对整批 push_set 补齐,与 WhoisXML 无关,保证每条规则都有研判
+    from app.services.llm import ensure_narratives
+    narr = ensure_narratives(db, push_set)
+    log["narrated"] = narr.get("generated", 0)
+    if narr["status"] == "disabled":
         log["notes"].append("LLM 未启用,跳过描述优化")
+    elif narr.get("missing"):
+        log["notes"].append(f"{narr['missing']} 条 LLM 描述重试后仍失败")
 
-    # 推送:这批确认的情报生成 intel.yaml
-    push_set = confirmed[:target]
+    # 推送:这批情报生成 intel.yaml
     if push_set:
         now = datetime.now(timezone.utc)
         now_ts = int(now.timestamp())

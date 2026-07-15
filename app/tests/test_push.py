@@ -215,3 +215,22 @@ def test_file_status_endpoint_reads_configured_dir(db, tmp_path):
     assert r["output_dir"] == str(tmp_path)
     assert r["yaml"]["count"] == 7
     assert r["taken_by_gate"] is True
+
+
+def test_generate_fills_llm_narrative_before_write(db, make_indicator, tmp_path, monkeypatch):
+    """规则生成路径写入前应补齐缺失的 LLM 研判(llm 开启时)。"""
+    from app.services import llm as _llm
+    output_cfg(db, tmp_path)
+    add_cfg(db, "LLM_ENABLED", "true")
+    add_cfg(db, "LLM_API_KEY", "k")
+    add_cfg(db, "TA_NODE_TOP_PER_SOURCE", "0")
+    ind = make_indicator(raw={"Event": {"info": "OTX | Akira"}})
+    db.add(ind)
+    db.commit()
+    monkeypatch.setattr(_llm, "chat_completion",
+                        lambda *a, **k: "命中威胁研判,建议阻断并上报,叙述足够长以通过非空校验判定门槛。")
+    result = push_traffic_to_ta_node(db, mode="full")
+    data = yaml.safe_load(Path(result["rule_file"]).read_text())
+    assert data["items"][0]["evidence"].get("narrative")
+    db.refresh(ind)
+    assert ind.raw.get("narrative")

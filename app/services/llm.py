@@ -75,6 +75,32 @@ def generate_narrative(db: Session, indicator, retries: int = 3) -> str | None:
     return None
 
 
+def ensure_narratives(db: Session, indicators) -> dict:
+    """对给定 indicators 里缺 narrative 的逐条生成(与 WhoisXML 无关);已有的跳过。
+
+    任何规则生成路径写入前都可调用,保证每条规则都有 LLM 研判。llm 未启用则不动。
+    """
+    s = get_effective_settings(db)
+    if not s.llm_enabled or not s.llm_api_key:
+        return {"status": "disabled", "generated": 0, "failed": 0, "missing": 0}
+    generated = failed = 0
+    for ind in indicators:
+        if (ind.raw or {}).get("narrative"):
+            continue
+        text = generate_narrative(db, ind)
+        if text:
+            raw = {**(ind.raw or {}), "narrative": text}
+            raw.pop("narrative_error", None)
+            ind.raw = raw
+            generated += 1
+        else:
+            ind.raw = {**(ind.raw or {}), "narrative_error": "LLM 多次重试仍为空"}
+            failed += 1
+    db.commit()
+    missing = sum(1 for i in indicators if not (i.raw or {}).get("narrative"))
+    return {"status": "success", "generated": generated, "failed": failed, "missing": missing}
+
+
 def enrich_narratives(db: Session, limit: int | None = None) -> dict:
     """对 high 档证据生成告警叙述,存 raw.narrative;失败/空自动重试,已生成的不重复。"""
     from app.models import IntelIndicator

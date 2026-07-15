@@ -156,6 +156,11 @@ def generate_ta_node_ioc_package(db: Session, mode: str = "incremental", batch_s
         if mode != "full":
             query = query.filter(IntelIndicator.pushed_to_ta_node.is_(False))
         indicators = query.limit(batch_size).all()
+
+    # 写入前补齐缺失的 LLM 研判(llm 开启时;与 WhoisXML 无关)
+    from app.services.llm import ensure_narratives
+    ensure_narratives(db, indicators)
+
     now = datetime.now(timezone.utc)
     items = []
     for indicator in indicators:
