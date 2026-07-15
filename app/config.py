@@ -33,6 +33,7 @@ DEFAULTS: dict[str, str] = {
     "LLM_MODEL": "gpt-4o-mini",
     "PIPELINE_TARGET": "10",
     "PIPELINE_MAX_ENRICH": "16",
+    "PIPELINE_TYPE_RATIO": "6:2:2",  # 确认集 ip:domain:url 类型占比
     "EXPORT_DIR": "release",
     "IOC_OUTPUT_DIR": "/data/ftp/ioc",
     "IOC_RULE_FILENAME": "intel.yaml",
@@ -80,6 +81,7 @@ class Settings:
     llm_model: str
     pipeline_target: int
     pipeline_max_enrich: int
+    pipeline_type_ratio: str
     export_dir: str
     ioc_output_dir: str
     ioc_rule_filename: str
@@ -125,6 +127,7 @@ def settings_from_values(db_values: dict[str, str] | None = None) -> Settings:
         llm_model=value_for("LLM_MODEL", db_values),
         pipeline_target=int(value_for("PIPELINE_TARGET", db_values)),
         pipeline_max_enrich=int(value_for("PIPELINE_MAX_ENRICH", db_values)),
+        pipeline_type_ratio=value_for("PIPELINE_TYPE_RATIO", db_values),
         export_dir=value_for("EXPORT_DIR", db_values),
         ioc_output_dir=value_for("IOC_OUTPUT_DIR", db_values),
         ioc_rule_filename=value_for("IOC_RULE_FILENAME", db_values),
