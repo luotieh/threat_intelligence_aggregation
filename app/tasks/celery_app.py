@@ -16,4 +16,9 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.daily_pipeline.daily_pipeline_task",
         "schedule": crontab(hour=23, minute=0),
     },
+    # 每日 23:30(在生成规则之后)归档 intel.yaml/zip 快照并写审计日志
+    "daily-rule-archive": {
+        "task": "app.tasks.rule_archive.rule_archive_task",
+        "schedule": crontab(hour=23, minute=30),
+    },
 }

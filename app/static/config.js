@@ -241,6 +241,26 @@ $("check-files").onclick = async () => {
     show(r);
   } catch (e) { setStatus("file_status_line", "检查失败", "err"); toast(e, "err"); show(e); }
 };
+$("archive-files").onclick = async () => {
+  setStatus("archive_status_line", "归档并写审计日志…");
+  try {
+    const r = await api("/ioc-rules/archive", { method: "POST" });
+    const a = r.archived || {};
+    const parts = [`${r.date}`, a.yaml ? "yaml✓" : "yaml✗", a.zip ? "zip✓" : "zip✗", r.verdict];
+    if ((r.pruned || []).length) parts.push(`清理${r.pruned.length}天`);
+    setStatus("archive_status_line", "✓ 已归档 " + parts.join(" · "), "ok");
+    toast("已归档并写审计日志", "ok"); show(r);
+  } catch (e) { setStatus("archive_status_line", "归档失败", "err"); toast(e, "err"); show(e); }
+};
+$("archive-log").onclick = async () => {
+  setStatus("archive_status_line", "读取审计日志…");
+  try {
+    const r = await api("/ioc-rules/archive/log?limit=30");
+    const rows = r.records || [];
+    setStatus("archive_status_line", `共 ${rows.length} 条审计记录(最新在前)`, "ok");
+    show(rows.length ? rows : "暂无审计记录");
+  } catch (e) { setStatus("archive_status_line", "读取失败", "err"); toast(e, "err"); show(e); }
+};
 
 // 初始化
 loadConfig().then(loadOverview).catch((e) => toast(e, "err"));

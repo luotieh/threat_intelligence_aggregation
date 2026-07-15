@@ -36,6 +36,8 @@ DEFAULTS: dict[str, str] = {
     "EXPORT_DIR": "release",
     "IOC_OUTPUT_DIR": "/data/ftp/ioc",
     "IOC_RULE_FILENAME": "intel.yaml",
+    "IOC_ARCHIVE_DIR": "",  # 空 → 落到 {IOC_OUTPUT_DIR}/archive
+    "IOC_ARCHIVE_RETENTION_DAYS": "90",
 }
 
 ENV_KEYS = set(DEFAULTS)
@@ -81,6 +83,8 @@ class Settings:
     export_dir: str
     ioc_output_dir: str
     ioc_rule_filename: str
+    ioc_archive_dir: str
+    ioc_archive_retention_days: int
 
 
 def value_for(key: str, db_values: dict[str, str] | None = None) -> str:
@@ -124,6 +128,8 @@ def settings_from_values(db_values: dict[str, str] | None = None) -> Settings:
         export_dir=value_for("EXPORT_DIR", db_values),
         ioc_output_dir=value_for("IOC_OUTPUT_DIR", db_values),
         ioc_rule_filename=value_for("IOC_RULE_FILENAME", db_values),
+        ioc_archive_dir=value_for("IOC_ARCHIVE_DIR", db_values),
+        ioc_archive_retention_days=int(value_for("IOC_ARCHIVE_RETENTION_DAYS", db_values)),
     )
 
 

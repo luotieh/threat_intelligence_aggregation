@@ -5,6 +5,7 @@ from app.db import SessionLocal, get_db
 from app.models import SyncState
 from app.schemas.sync import PushRequest
 from app.services.config_service import get_effective_settings
+from app.services.rule_archive import archive_rule_files, read_audit_log
 from app.services.ta_node_client import (
     generate_ta_node_ioc_package,
     inspect_rule_files,
@@ -53,6 +54,24 @@ def ioc_rules_file_status(db: Session = Depends(get_db)):
     """
     s = get_effective_settings(db)
     return inspect_rule_files(s.ioc_output_dir, s.ioc_rule_filename)
+
+
+@router.post("/ioc-rules/archive")
+def ioc_rules_archive(db: Session = Depends(get_db)):
+    """手动触发:把当前 intel.yaml/zip 快照归档并写审计日志(与每日定时任务同逻辑)。"""
+    s = get_effective_settings(db)
+    return archive_rule_files(
+        s.ioc_output_dir, s.ioc_rule_filename,
+        archive_dir=s.ioc_archive_dir or None,
+        retention_days=s.ioc_archive_retention_days,
+    )
+
+
+@router.get("/ioc-rules/archive/log")
+def ioc_rules_archive_log(limit: int = 30, db: Session = Depends(get_db)):
+    """读取最近 limit 条归档审计记录(最新在前),便于查看每日 yaml/zip 状态与网闸取走情况。"""
+    s = get_effective_settings(db)
+    return {"records": read_audit_log(s.ioc_output_dir, s.ioc_archive_dir or None, limit)}
 
 
 @router.get("/push/ta-node/status")
