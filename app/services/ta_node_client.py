@@ -204,6 +204,89 @@ def write_ta_node_ioc_files(rule_path: Path, items: list[dict]) -> None:
         archive.write(rule_path, arcname=rule_path.name)
 
 
+def _count_items(data: bytes | str) -> int:
+    """数 ta_node 规则里的条数(items 列表长度);解析失败或结构不符则抛异常。"""
+    parsed = yaml.safe_load(data) or {}
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("items"), list):
+        raise ValueError("规则内容缺少顶层 items 列表")
+    return len(parsed["items"])
+
+
+def _inspect_yaml(path: Path) -> dict:
+    info = {"exists": path.exists(), "count": None, "size": None, "mtime": None}
+    if not info["exists"]:
+        return info
+    stat = path.stat()
+    info["size"] = stat.st_size
+    info["mtime"] = datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat()
+    try:
+        info["count"] = _count_items(path.read_text(encoding="utf-8"))
+    except Exception as exc:  # noqa: BLE001 - 坏文件不抛,count 置空并带说明
+        info["error"] = str(exc)
+    return info
+
+
+def _inspect_zip(path: Path, member: str) -> dict:
+    info = {"exists": path.exists(), "count": None, "size": None, "mtime": None}
+    if not info["exists"]:
+        return info
+    stat = path.stat()
+    info["size"] = stat.st_size
+    info["mtime"] = datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat()
+    try:
+        with zipfile.ZipFile(path) as archive:
+            names = archive.namelist()
+            inner = member if member in names else (names[0] if names else None)
+            if inner is None:
+                raise ValueError("zip 为空")
+            info["count"] = _count_items(archive.read(inner))
+    except Exception as exc:  # noqa: BLE001 - 坏压缩包不抛
+        info["error"] = str(exc)
+    return info
+
+
+def inspect_rule_files(output_dir: str, filename: str) -> dict:
+    """扫描输出目录里 intel.yaml / intel.zip 的实际存在情况与条数。
+
+    用于判断内网网闸是否已把 zip 取走:yaml 在而 zip 缺 → taken_by_gate。
+    纯磁盘检查,不读数据库,不产生副作用。
+    """
+    rule_path = _safe_rule_path(Path(output_dir), filename)
+    zip_path = rule_path.with_suffix(".zip")
+    yaml_info = _inspect_yaml(rule_path)
+    zip_info = _inspect_zip(zip_path, rule_path.name)
+
+    consistent = None
+    if yaml_info["count"] is not None and zip_info["count"] is not None:
+        consistent = yaml_info["count"] == zip_info["count"]
+
+    if yaml_info["exists"] and not zip_info["exists"]:
+        taken_by_gate = True
+        verdict = "zip 已被网闸取走(yaml 仍在)"
+    elif yaml_info["exists"] and zip_info["exists"]:
+        taken_by_gate = False
+        verdict = "规则文件就绪,网闸尚未取走 zip"
+        if consistent is False:
+            verdict += "(注意:yaml 与 zip 条数不一致)"
+    elif not yaml_info["exists"] and not zip_info["exists"]:
+        taken_by_gate = False
+        verdict = "无规则文件(尚未生成,或 yaml/zip 均已被移走)"
+    else:  # zip 在但 yaml 缺
+        taken_by_gate = False
+        verdict = "异常:zip 存在但 yaml 缺失"
+
+    return {
+        "output_dir": str(rule_path.parent),
+        "rule_filename": rule_path.name,
+        "zip_filename": zip_path.name,
+        "yaml": yaml_info,
+        "zip": zip_info,
+        "consistent": consistent,
+        "taken_by_gate": taken_by_gate,
+        "verdict": verdict,
+    }
+
+
 def save_uploaded_ioc_rule(output_dir: str, filename: str, content: bytes) -> dict:
     rule_path = _safe_rule_path(Path(output_dir), filename)
     rule_path.parent.mkdir(parents=True, exist_ok=True)

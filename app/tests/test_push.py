@@ -134,3 +134,84 @@ def test_top_per_source_zero_keeps_full_behavior(db, make_indicator, tmp_path):
     db.commit()
     result = push_traffic_to_ta_node(db, mode="full")
     assert result["count"] == 3
+
+
+# ---- 磁盘规则文件检查(网闸取走探测)----
+def _write_rule_files(tmp_path, count=3, make_zip=True):
+    import zipfile as _zip
+    items = [{"id": f"i{n}", "type": "domain", "value": f"e{n}.com",
+              "category": "c2", "severity": "high", "source": "Threat Intel Hub",
+              "enabled": True} for n in range(count)]
+    yaml_path = tmp_path / "intel.yaml"
+    yaml_path.write_text(yaml.safe_dump({"items": items}, allow_unicode=True), encoding="utf-8")
+    if make_zip:
+        with _zip.ZipFile(tmp_path / "intel.zip", "w") as z:
+            z.write(yaml_path, arcname="intel.yaml")
+    return yaml_path
+
+
+def test_inspect_both_present_not_taken(tmp_path):
+    from app.services.ta_node_client import inspect_rule_files
+    _write_rule_files(tmp_path, count=5)
+    r = inspect_rule_files(str(tmp_path), "intel.yaml")
+    assert r["yaml"]["exists"] is True and r["yaml"]["count"] == 5
+    assert r["zip"]["exists"] is True and r["zip"]["count"] == 5
+    assert r["consistent"] is True
+    assert r["taken_by_gate"] is False
+
+
+def test_inspect_zip_taken_by_gate(tmp_path):
+    from app.services.ta_node_client import inspect_rule_files
+    _write_rule_files(tmp_path, count=4)
+    (tmp_path / "intel.zip").unlink()   # 网闸取走 zip
+    r = inspect_rule_files(str(tmp_path), "intel.yaml")
+    assert r["yaml"]["exists"] is True and r["yaml"]["count"] == 4
+    assert r["zip"]["exists"] is False and r["zip"]["count"] is None
+    assert r["taken_by_gate"] is True
+    assert "网闸" in r["verdict"]
+
+
+def test_inspect_both_missing(tmp_path):
+    from app.services.ta_node_client import inspect_rule_files
+    r = inspect_rule_files(str(tmp_path), "intel.yaml")
+    assert r["yaml"]["exists"] is False
+    assert r["zip"]["exists"] is False
+    assert r["taken_by_gate"] is False
+
+
+def test_inspect_count_mismatch_flagged(tmp_path):
+    from app.services.ta_node_client import inspect_rule_files
+    import zipfile as _zip
+    _write_rule_files(tmp_path, count=3)
+    # 用不同条数的 yaml 覆盖 zip 内容,制造不一致
+    stale = tmp_path / "stale.yaml"
+    stale.write_text(yaml.safe_dump({"items": [{"id": "x"}]}, allow_unicode=True), encoding="utf-8")
+    with _zip.ZipFile(tmp_path / "intel.zip", "w") as z:
+        z.write(stale, arcname="intel.yaml")
+    r = inspect_rule_files(str(tmp_path), "intel.yaml")
+    assert r["yaml"]["count"] == 3
+    assert r["zip"]["count"] == 1
+    assert r["consistent"] is False
+
+
+def test_inspect_bad_yaml_count_none(tmp_path):
+    from app.services.ta_node_client import inspect_rule_files
+    (tmp_path / "intel.yaml").write_text("::: not valid yaml :::\n  - [", encoding="utf-8")
+    r = inspect_rule_files(str(tmp_path), "intel.yaml")
+    assert r["yaml"]["exists"] is True
+    assert r["yaml"]["count"] is None
+    assert r["yaml"].get("error")
+
+
+def test_file_status_endpoint_reads_configured_dir(db, tmp_path):
+    """端点应按 effective settings 的输出目录扫盘并给出网闸结论。"""
+    from app.api.push import ioc_rules_file_status
+    add_cfg(db, "IOC_OUTPUT_DIR", str(tmp_path))
+    add_cfg(db, "IOC_RULE_FILENAME", "intel.yaml")
+    db.commit()
+    _write_rule_files(tmp_path, count=7)
+    (tmp_path / "intel.zip").unlink()   # 模拟网闸取走
+    r = ioc_rules_file_status(db)
+    assert r["output_dir"] == str(tmp_path)
+    assert r["yaml"]["count"] == 7
+    assert r["taken_by_gate"] is True

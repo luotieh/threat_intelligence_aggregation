@@ -5,7 +5,12 @@ from app.db import SessionLocal, get_db
 from app.models import SyncState
 from app.schemas.sync import PushRequest
 from app.services.config_service import get_effective_settings
-from app.services.ta_node_client import generate_ta_node_ioc_package, pending_and_pushed_counts, save_uploaded_ioc_rule
+from app.services.ta_node_client import (
+    generate_ta_node_ioc_package,
+    inspect_rule_files,
+    pending_and_pushed_counts,
+    save_uploaded_ioc_rule,
+)
 
 router = APIRouter()
 
@@ -37,6 +42,17 @@ async def upload_ioc_rule(file: UploadFile = File(...), db: Session = Depends(ge
         return save_uploaded_ioc_rule(s.ioc_output_dir, file.filename or s.ioc_rule_filename, content)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/ioc-rules/file-status")
+def ioc_rules_file_status(db: Session = Depends(get_db)):
+    """检查输出目录里 intel.yaml / intel.zip 的实际磁盘状态与条数。
+
+    与 /push/ta-node/status(读数据库计数)不同,本接口直接扫磁盘,
+    可判断内网网闸是否已把 zip 取走。
+    """
+    s = get_effective_settings(db)
+    return inspect_rule_files(s.ioc_output_dir, s.ioc_rule_filename)
 
 
 @router.get("/push/ta-node/status")

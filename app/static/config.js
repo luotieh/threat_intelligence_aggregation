@@ -228,6 +228,19 @@ $("upload-ioc").onclick = async () => {
   catch (e) { toast(e, "err"); show(e); }
 };
 $("push-status").onclick = async () => { try { show(await api("/push/ta-node/status")); await loadOverview(); toast("已刷新推送状态", "ok"); } catch (e) { toast(e, "err"); show(e); } };
+$("check-files").onclick = async () => {
+  setStatus("file_status_line", "检查规则文件…");
+  try {
+    const r = await api("/ioc-rules/file-status");
+    const y = r.yaml || {}, z = r.zip || {};
+    const yTxt = y.exists ? `yaml ${y.count ?? "?"}条(${fmtTime(y.mtime)})` : "yaml 缺失";
+    const zTxt = z.exists ? `zip ${z.count ?? "?"}条` : "zip 缺失";
+    const kind = r.taken_by_gate ? "ok" : (y.exists && z.exists ? "ok" : "err");
+    setStatus("file_status_line", `${r.taken_by_gate ? "✓" : (y.exists && z.exists ? "•" : "!")} ${yTxt} · ${zTxt} · ${r.verdict}`, kind);
+    toast(r.verdict, r.taken_by_gate || (y.exists && z.exists) ? "ok" : "err");
+    show(r);
+  } catch (e) { setStatus("file_status_line", "检查失败", "err"); toast(e, "err"); show(e); }
+};
 
 // 初始化
 loadConfig().then(loadOverview).catch((e) => toast(e, "err"));
