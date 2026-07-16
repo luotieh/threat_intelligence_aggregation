@@ -35,7 +35,7 @@ DEFAULTS: dict[str, str] = {
     "PIPELINE_MAX_ENRICH": "16",
     "PIPELINE_TYPE_RATIO": "6:2:2",  # 确认集 ip:domain:url 类型占比
     "EXPORT_DIR": "release",
-    "IOC_OUTPUT_DIR": "/data/ftp/ioc",
+    "IOC_OUTPUT_DIR": "/data/ftp/ioc/configs",
     "IOC_RULE_FILENAME": "intel.yaml",
     "IOC_ARCHIVE_DIR": "",  # 空 → 落到 {IOC_OUTPUT_DIR}/archive
     "IOC_ARCHIVE_RETENTION_DAYS": "90",
