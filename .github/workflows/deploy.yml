@@ -53,14 +53,17 @@ jobs:
               exit 1
             fi
 
-            # 拉最新 app/ 源码(只强制更新 app 目录,不动服务器上的其它本地改动)
             cd "$PROJ"
             git fetch origin master
-            git checkout -f origin/master -- app
 
-            # 基于 base 叠一层(纯源码,无需联网、无需 tar)
+            # 把 origin/master 的 app/ 导出到全新空目录再叠层。
+            # 不能 checkout 到既有 worktree 再 cp:checkout 只恢复存在的文件,
+            # 从不删除该提交里已删掉的文件,陈旧模块会一路打进镜像(rule_archive 就是这么
+            # 在服务器上活下来的)。空目录导出让删除天然生效,且不碰服务器本地改动与索引。
             rm -rf /tmp/overlay && mkdir -p /tmp/overlay
-            cp -r app /tmp/overlay/app
+            GIT_INDEX_FILE=/tmp/overlay.index git --work-tree=/tmp/overlay checkout -f origin/master -- app
+            rm -f /tmp/overlay.index
+            test -f /tmp/overlay/app/main.py || { echo "app 导出失败"; exit 1; }
             printf 'FROM threat-intel-hub:base\nCOPY app ./app\n' > /tmp/overlay/Dockerfile
             docker build -t threat-intel-hub:latest /tmp/overlay
 
