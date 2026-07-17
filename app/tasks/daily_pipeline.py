@@ -7,6 +7,6 @@ from app.tasks.celery_app import celery_app
 def daily_pipeline_task():
     db = SessionLocal()
     try:
-        return run_daily_pipeline(db)
+        return run_daily_pipeline(db, trigger="beat")
     finally:
         db.close()

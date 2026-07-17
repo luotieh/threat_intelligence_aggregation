@@ -30,11 +30,19 @@ def _rank_key(indicator: IntelIndicator) -> tuple[int, float]:
     return (confidence, last_seen)
 
 
+def _pushed_rank_key(indicator: IntelIndicator) -> tuple[float, int]:
+    """已出规则的列表按推送时间 DESC(最新一批在最前),平手再按 confidence。"""
+    pushed_at = indicator.pushed_at.timestamp() if indicator.pushed_at else 0.0
+    confidence = indicator.confidence if indicator.confidence is not None else -1
+    return (pushed_at, confidence)
+
+
 def select_top_per_source(db: Session, top_n: int, min_severity: str,
-                          date_from=None, date_to=None) -> list[dict]:
+                          date_from=None, date_to=None, pushed_only: bool = False) -> list[dict]:
     """按源分组精选流量侧高危 IOC,每源取前 top_n 条(top_n<=0 表示不截断)。
 
     date_from/date_to(datetime,可选)按 last_seen 过滤:[date_from, date_to)。
+    pushed_only=True 时只保留真正出过规则的(pushed_to_ta_node),排除仅入库的候选。
     返回 [{"source": str, "items": list[IntelIndicator]}, ...],分组按 source 名升序。
     """
     allowed = SEVERITY_TIERS.get(min_severity, SEVERITY_TIERS["high"])
@@ -43,6 +51,8 @@ def select_top_per_source(db: Session, top_n: int, min_severity: str,
         IntelIndicator.to_ids.is_(True),
         IntelIndicator.severity.in_(sorted(allowed)),
     )
+    if pushed_only:
+        query = query.filter(IntelIndicator.pushed_to_ta_node.is_(True))
     if date_from is not None:
         query = query.filter(IntelIndicator.last_seen >= date_from)
     if date_to is not None:
@@ -51,9 +61,10 @@ def select_top_per_source(db: Session, top_n: int, min_severity: str,
     groups: dict[str, list[IntelIndicator]] = {}
     for row in rows:
         groups.setdefault(indicator_source(row), []).append(row)
+    key = _pushed_rank_key if pushed_only else _rank_key
     result: list[dict] = []
     for source in sorted(groups):
-        items = sorted(groups[source], key=_rank_key, reverse=True)
+        items = sorted(groups[source], key=key, reverse=True)
         if top_n > 0:
             items = items[:top_n]
         result.append({"source": source, "items": items})

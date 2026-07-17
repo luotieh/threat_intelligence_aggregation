@@ -29,6 +29,6 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db() -> None:
-    from app.models import app_config, indicator, sync_state  # noqa: F401
+    from app.models import app_config, indicator, pipeline_run, sync_state  # noqa: F401
 
     Base.metadata.create_all(bind=engine)

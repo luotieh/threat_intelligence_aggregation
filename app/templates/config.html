@@ -199,7 +199,7 @@
           <!-- 概览 -->
           <section id="panel-overview" class="panel active">
             <div class="stats">
-              <div class="stat"><div class="k">🎯 精选情报</div><div class="v" id="s-total">—</div></div>
+              <div class="stat"><div class="k">🎯 已出规则</div><div class="v" id="s-total">—</div></div>
               <div class="stat"><div class="k">✔ WhoisXML 确认</div><div class="v" id="s-confirmed">—</div></div>
               <div class="stat"><div class="k">🤖 描述覆盖</div><div class="v" id="s-narrated">—</div></div>
               <div class="stat"><div class="k">📤 已推送</div><div class="v" id="s-pushed">—</div></div>
@@ -306,12 +306,11 @@
                   <button class="ghost btn" id="push-full">生成全量规则包</button>
                   <button class="ghost btn" id="push-inc">生成增量规则包</button>
                   <button class="ghost btn" id="check-files">检查规则文件</button>
-                  <button class="ghost btn" id="archive-files">归档并审计</button>
-                  <button class="ghost btn" id="archive-log">查看审计日志</button>
+                  <button class="ghost btn" id="run-log">查看运行日志</button>
                 </div>
                 <div class="status" id="push_status_line"></div>
                 <div class="status" id="file_status_line"></div>
-                <div class="status" id="archive_status_line"></div>
+                <div class="status" id="run_log_line"></div>
               </div>
               <div class="card">
                 <h2>手动上传规则</h2>
@@ -326,9 +325,9 @@
           <section id="panel-intel" class="panel">
             <div class="card">
               <h2>精选高危流量情报</h2>
-              <p class="desc">当前落地推送的精选情报 —— 每条经 WhoisXML 双源确认、带证据与自然语言描述。</p>
+              <p class="desc">当前落地推送的规则 —— 每条都带 LLM 描述;WhoisXML 额度足时双源确认,不足则用高危 OTX 单源候选按配额补足(见运行日志 otx_only)。</p>
               <div class="card-row" style="max-width:760px">
-                <label>每源条数 <input id="top_preview_n" type="number" min="0" value="10"></label>
+                <label>每源条数 <input id="top_preview_n" type="number" min="0" value="10" title="只看已出规则时不限条数"></label>
                 <label>最低危险度
                   <select id="top_preview_sev"><option value="high">high</option><option value="medium">medium</option><option value="low">low</option></select>
                 </label>
@@ -336,6 +335,7 @@
                 <label>结束日期 <input id="top_date_to" type="date"></label>
               </div>
               <div class="actions">
+                <label class="chk"><input id="top_pushed_only" type="checkbox" checked> 只看已出规则</label>
                 <button class="btn" id="load-top">刷新列表</button>
                 <button class="ghost btn" id="clear-date">清除日期</button>
               </div>

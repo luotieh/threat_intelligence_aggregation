@@ -17,7 +17,6 @@ from app.tasks.celery_app import TASK_MODULES, celery_app
 # beat_schedule 之外也全量覆盖:API 可用 .delay() 触发任意一个
 EXPECTED_TASKS = [
     "app.tasks.daily_pipeline.daily_pipeline_task",
-    "app.tasks.rule_archive.rule_archive_task",
     "app.tasks.enrich_whoisxml.enrich_whoisxml_task",
     "app.tasks.push_ta_node.push_ta_node_task",
     "app.tasks.sync_otx.sync_otx_task",

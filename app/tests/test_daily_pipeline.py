@@ -170,3 +170,90 @@ def test_pipeline_fallback_honors_ratio(db, monkeypatch, tmp_path):
     result = run_daily_pipeline(db, target=10, max_enrich=2)
     assert result["pushed_by_type"] == {"ip": 6, "domain": 2, "url": 2}
     assert result["pushed"] == 10
+
+
+# ---- 运行日志:写完文件当场落库,网闸取走文件也不影响追溯 ----
+
+def test_pipeline_skipped_is_recorded_with_reason(db):
+    from app.models import PipelineRun
+
+    assert run_daily_pipeline(db)["status"] == "skipped"
+
+    run = db.query(PipelineRun).one()
+    assert run.status == "skipped"
+    assert "WHOISXML_API_KEY" in run.reason
+    assert run.trigger == "manual"
+
+
+def test_pipeline_records_run_with_real_file_facts(db, make_indicator, monkeypatch, tmp_path):
+    """不 mock 写文件:验证 yaml/zip 的大小与 sha 是真从磁盘取的。"""
+    from app.models import PipelineRun
+
+    db.add(AppConfig(key="WHOISXML_API_KEY", value="k"))
+    db.add(AppConfig(key="IOC_OUTPUT_DIR", value=str(tmp_path)))
+    for i in range(2):
+        db.add(make_indicator(value=f"e{i}.com", normalized_value=f"e{i}.com",
+                              normalized_type="domain", severity="high", confidence=90 - i,
+                              tags=[{"name": "source:otx"}]))
+    db.commit()
+    _mute_io(monkeypatch)
+    monkeypatch.setattr(daily_pipeline, "query_whoisxml",
+                        lambda key, ioc: {"results": [{"threatType": "malware"}]})
+
+    result = run_daily_pipeline(db, target=2, max_enrich=10, trigger="beat")
+
+    assert result["pushed"] == 2
+    run = db.query(PipelineRun).one()
+    assert run.trigger == "beat" and run.status == "success"
+    assert run.enrich_attempts == 2 and run.confirmed == 2 and run.pushed == 2
+    assert run.files["yaml"]["exists"] is True
+    assert run.files["yaml"]["count"] == 2
+    assert run.files["yaml"]["size"] == (tmp_path / "intel.yaml").stat().st_size
+    assert len(run.files["yaml"]["sha256"]) == 64
+    assert run.files["zip"]["exists"] is True
+    # 规则清单可在文件被网闸取走后追溯当批发了什么
+    assert sorted(r["value"] for r in run.rules) == ["e0.com", "e1.com"]
+
+
+def test_pipeline_records_failure_and_reraises(db, monkeypatch, tmp_path):
+    from app.models import PipelineRun
+    import pytest
+
+    db.add(AppConfig(key="WHOISXML_API_KEY", value="k"))
+    db.add(AppConfig(key="IOC_OUTPUT_DIR", value=str(tmp_path)))
+    db.commit()
+
+    def boom(db, max_pulses=None):
+        raise RuntimeError("OTX 炸了")
+
+    monkeypatch.setattr(daily_pipeline, "sync_otx_direct", boom)
+    monkeypatch.setattr(daily_pipeline, "_candidates_by_type", boom)
+
+    with pytest.raises(RuntimeError):
+        run_daily_pipeline(db, target=1, max_enrich=1)
+
+    run = db.query(PipelineRun).one()
+    assert run.status == "failed"
+    assert "OTX 炸了" in run.reason
+
+
+def test_run_log_failure_never_loses_the_rule_file(db, make_indicator, monkeypatch, tmp_path):
+    """日志写不进去,也绝不能让已经落地的规则文件白写。"""
+    db.add(AppConfig(key="WHOISXML_API_KEY", value="k"))
+    db.add(AppConfig(key="IOC_OUTPUT_DIR", value=str(tmp_path)))
+    db.add(make_indicator(value="e.com", normalized_value="e.com", normalized_type="domain",
+                          severity="high", confidence=90, tags=[{"name": "source:otx"}]))
+    db.commit()
+    _mute_io(monkeypatch)
+    monkeypatch.setattr(daily_pipeline, "query_whoisxml",
+                        lambda key, ioc: {"results": [{"threatType": "malware"}]})
+
+    def broken_record(db, **kw):
+        raise RuntimeError("落库失败")
+
+    monkeypatch.setattr(daily_pipeline, "record_run", broken_record)
+
+    result = run_daily_pipeline(db, target=1, max_enrich=5)
+
+    assert result["status"] == "success" and result["pushed"] == 1
+    assert (tmp_path / "intel.yaml").exists()

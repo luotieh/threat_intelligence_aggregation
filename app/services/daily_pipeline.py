@@ -10,6 +10,7 @@ from app.models import IntelIndicator
 from app.services.config_service import get_effective_settings
 from app.services.enrichment import ENRICHED_TAG, query_whoisxml
 from app.services.otx_source import sync_otx_direct
+from app.services.run_log import collect_file_facts, record_run, rule_manifest
 from app.services.ta_node_client import (
     _safe_rule_path,
     map_indicator_to_ta_node_item,
@@ -120,15 +121,39 @@ def _mark_enriched(indicator: IntelIndicator, data: dict) -> bool:
     return confirmed
 
 
-def run_daily_pipeline(db: Session, target: int | None = None, max_enrich: int | None = None) -> dict:
+def run_daily_pipeline(db: Session, target: int | None = None, max_enrich: int | None = None,
+                       trigger: str = "manual") -> dict:
     """每日编排:攒够 target 条 WhoisXML 确认的高危流量情报 → LLM 描述 → 推送。
 
     额度保护:整个流程最多富化 max_enrich 次(默认 16,≈WhoisXML Free 500/月)。
     无记录/失败的不计入,继续补(现有 high 档不足时补拉 OTX),直到达标或触顶。
+
+    每次运行(含跳过/异常)都落一条 PipelineRun 记录。
     """
+    started_at = datetime.now(timezone.utc)
+    try:
+        return _run_daily_pipeline(db, target, max_enrich, trigger, started_at)
+    except Exception as exc:  # noqa: BLE001 - 异常也要留痕,记完再抛
+        _safe_record(db, trigger=trigger, status="failed", started_at=started_at,
+                     reason=f"{type(exc).__name__}: {exc}")
+        raise
+
+
+def _safe_record(db: Session, **kwargs) -> None:
+    """写运行日志失败绝不能连累已经落地的规则文件。"""
+    try:
+        record_run(db, **kwargs)
+    except Exception:  # noqa: BLE001
+        db.rollback()
+
+
+def _run_daily_pipeline(db: Session, target: int | None, max_enrich: int | None,
+                        trigger: str, started_at: datetime) -> dict:
     s = get_effective_settings(db)
     if not s.whoisxml_api_key:
-        return {"status": "skipped", "reason": "WHOISXML_API_KEY 未配置"}
+        reason = "WHOISXML_API_KEY 未配置"
+        _safe_record(db, trigger=trigger, status="skipped", started_at=started_at, reason=reason)
+        return {"status": "skipped", "reason": reason}
     target = s.pipeline_target if target is None else target
     max_enrich = s.pipeline_max_enrich if max_enrich is None else max_enrich
     quota = type_quotas(target, parse_ratio(s.pipeline_type_ratio))
@@ -200,6 +225,7 @@ def run_daily_pipeline(db: Session, target: int | None = None, max_enrich: int |
     from app.services.llm import ensure_narratives
     narr = ensure_narratives(db, push_set)
     log["narrated"] = narr.get("generated", 0)
+    log["narrative"] = narr  # 完整结果(generated/failed/missing)进运行日志
     if narr["status"] == "disabled":
         log["notes"].append("LLM 未启用,跳过描述优化")
     elif narr.get("missing"):
@@ -222,4 +248,13 @@ def run_daily_pipeline(db: Session, target: int | None = None, max_enrich: int |
         db.commit()
         log["pushed"] = len(items)
         log["rule_file"] = str(rule_path)
+        # 写完立刻取事实:网闸可能几十秒内就把文件取走,晚一步就只剩空目录
+        files = collect_file_facts(rule_path, len(items))
+        rules = rule_manifest(push_set)
+    else:
+        files, rules = None, []
+        log["notes"].append("无可推送情报,未生成规则文件")
+
+    _safe_record(db, trigger=trigger, status="success", started_at=started_at,
+                 log=log, files=files, rules=rules)
     return log

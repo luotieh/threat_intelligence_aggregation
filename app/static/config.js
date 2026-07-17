@@ -105,7 +105,8 @@ $("theme-toggle").onclick = () => {
 // ---- 概览 ----
 async function loadOverview() {
   try {
-    const top = await api("/indicators/top?top_per_source=100&min_severity=low");
+    // 概览与列表同口径:只统计真正出过规则的,否则"描述覆盖"会把未推送的候选算进分母
+    const top = await api("/indicators/top?top_per_source=0&min_severity=low&pushed_only=true");
     const items = top.sources.flatMap((s) => s.items);
     $("s-total").textContent = items.length;
     $("s-confirmed").textContent = items.filter((i) => (i.whoisxml || {}).threat_type).length;
@@ -143,26 +144,33 @@ function renderTop(resp) {
         : '<span class="muted">—</span>';
       const sev = `<span class="sev ${esc(item.severity)}">${esc(item.severity)}</span>`;
       const narr = item.narrative ? esc(item.narrative) : '<span class="muted">—</span>';
+      const when = resp.pushed_only ? item.pushed_at : item.created_at;
       rows.push(`<tr><td>${esc(src.source)}</td><td class="mono">${esc(item.value)}</td><td>${esc(item.misp_type)}</td>` +
         `<td>${sev}</td><td>${esc(item.confidence ?? "")}</td><td>${wx}</td><td class="narr">${narr}</td>` +
-        `<td class="mono">${fmtTime(item.created_at)}</td></tr>`);
+        `<td class="mono">${fmtTime(when)}</td></tr>`);
     }
   }
   const dr = (resp.date_from || resp.date_to) ? ` · 日期 ${resp.date_from || "…"} ~ ${resp.date_to || "…"}` : "";
-  $("top_meta").textContent = `共 ${rows.length} 条 · 最低危险度 ${resp.min_severity} · 每源上限 ${resp.top_per_source}${dr}`;
+  const scope = resp.pushed_only ? "只看已出规则" : `全部候选 · 每源上限 ${resp.top_per_source}`;
+  $("top_meta").textContent = `共 ${rows.length} 条 · ${scope} · 最低危险度 ${resp.min_severity}${dr}`;
   $("top_table").innerHTML = `<div class="table-wrap"><table><thead><tr><th>源</th><th>IOC</th><th>类型</th>` +
-    `<th>危险度</th><th>置信</th><th>WhoisXML</th><th>LLM 描述</th><th>获取时间</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+    `<th>危险度</th><th>置信</th><th>WhoisXML</th><th>LLM 描述</th>` +
+    `<th>${resp.pushed_only ? "推送时间" : "获取时间"}</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
 }
 async function loadTop() {
-  const n = $("top_preview_n").value || 10;
+  const pushedOnly = $("top_pushed_only").checked;
+  // 只看已出规则时不截断:出过的规则本来就没几条,截断反而看不全历史
+  const n = pushedOnly ? 0 : ($("top_preview_n").value || 10);
   const sev = $("top_preview_sev").value || "high";
   let url = `/indicators/top?top_per_source=${n}&min_severity=${sev}`;
+  if (pushedOnly) url += "&pushed_only=true";
   const df = $("top_date_from").value, dt = $("top_date_to").value;
   if (df) url += `&date_from=${df}`;
   if (dt) url += `&date_to=${dt}`;
   try { renderTop(await api(url)); }
   catch (e) { toast(e, "err"); show(e); }
 }
+$("top_pushed_only").onchange = () => { $("top_preview_n").disabled = $("top_pushed_only").checked; loadTop(); };
 $("load-top").onclick = loadTop;
 $("clear-date").onclick = () => { $("top_date_from").value = ""; $("top_date_to").value = ""; loadTop(); };
 
@@ -241,25 +249,35 @@ $("check-files").onclick = async () => {
     show(r);
   } catch (e) { setStatus("file_status_line", "检查失败", "err"); toast(e, "err"); show(e); }
 };
-$("archive-files").onclick = async () => {
-  setStatus("archive_status_line", "归档并写审计日志…");
+// 运行日志:流水线写文件时当场落库的事实,网闸取走文件也不影响追溯
+function fmtRun(r) {
+  const q = r.type_quota || {}, p = r.pushed_by_type || {};
+  const f = r.files || {}, y = f.yaml || {}, z = f.zip || {};
+  const bits = [
+    `#${r.id} ${fmtTime(r.started_at)} · ${r.trigger === "beat" ? "定时" : "手动"} · ${r.status}`,
+    r.reason ? `原因:${r.reason}` : null,
+    `富化 WhoisXML ${r.enrich_attempts ?? 0} 次 → 确认 ${r.confirmed ?? 0} 条` +
+      (r.otx_only ? ` · OTX 单源补 ${r.otx_only} 条` : ""),
+    `LLM 描述 新生成 ${r.narrated ?? 0} · 失败 ${r.narrate_failed ?? 0} · 写入时仍缺 ${r.narrate_missing ?? 0}`,
+    `出规则 ${r.pushed ?? 0} 条(ip ${p.ip ?? 0}/${q.ip ?? 0} · 域名 ${p.domain ?? 0}/${q.domain ?? 0} · url ${p.url ?? 0}/${q.url ?? 0})`,
+    y.exists ? `yaml ${y.name} · ${y.count} 条 · ${y.size}B · sha ${(y.sha256 || "").slice(0, 12)}` : "yaml 未生成",
+    z.exists ? `zip  ${z.name} · ${z.size}B · sha ${(z.sha256 || "").slice(0, 12)}` : "zip 未生成",
+    r.duration_ms != null ? `耗时 ${(r.duration_ms / 1000).toFixed(1)}s` : null,
+  ].filter(Boolean);
+  for (const n of r.notes || []) bits.push("· " + n);
+  return bits.join("\n");
+}
+$("run-log").onclick = async () => {
+  setStatus("run_log_line", "读取运行日志…");
   try {
-    const r = await api("/ioc-rules/archive", { method: "POST" });
-    const a = r.archived || {};
-    const parts = [`${r.date}`, a.yaml ? "yaml✓" : "yaml✗", a.zip ? "zip✓" : "zip✗", r.verdict];
-    if ((r.pruned || []).length) parts.push(`清理${r.pruned.length}天`);
-    setStatus("archive_status_line", "✓ 已归档 " + parts.join(" · "), "ok");
-    toast("已归档并写审计日志", "ok"); show(r);
-  } catch (e) { setStatus("archive_status_line", "归档失败", "err"); toast(e, "err"); show(e); }
-};
-$("archive-log").onclick = async () => {
-  setStatus("archive_status_line", "读取审计日志…");
-  try {
-    const r = await api("/ioc-rules/archive/log?limit=30");
-    const rows = r.records || [];
-    setStatus("archive_status_line", `共 ${rows.length} 条审计记录(最新在前)`, "ok");
-    show(rows.length ? rows : "暂无审计记录");
-  } catch (e) { setStatus("archive_status_line", "读取失败", "err"); toast(e, "err"); show(e); }
+    const r = await api("/pipeline/runs?limit=30");
+    const runs = r.runs || [];
+    if (!runs.length) { setStatus("run_log_line", "暂无运行记录(流水线还没跑过)", ""); show("暂无运行记录"); return; }
+    const last = runs[0];
+    setStatus("run_log_line", `最近 ${runs.length} 次运行 · 最新 ${fmtTime(last.started_at)} ${last.status} 出规则 ${last.pushed ?? 0} 条`,
+      last.status === "success" ? "ok" : "err");
+    show(runs.map(fmtRun).join("\n\n"));
+  } catch (e) { setStatus("run_log_line", "读取失败", "err"); toast(e, "err"); show(e); }
 };
 
 // 初始化
