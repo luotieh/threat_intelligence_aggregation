@@ -53,3 +53,39 @@ def test_config_page_has_no_hardcoded_version():
     """防回归:任何写死的版本串都会再次导致发不出新前端。"""
     html = TestClient(app).get("/config").text
     assert "v=20260709a" not in html
+
+
+def _panel_of(html: str, needle: str) -> str:
+    """needle 所在元素归属哪个 panel-*(面板之间靠 .active 切换,非活动面板不可见)。"""
+    cur = None
+    for line in html.splitlines():
+        m = re.search(r'id="panel-([a-z]+)"', line)
+        if m:
+            cur = m.group(1)
+        if needle in line:
+            return cur
+    return ""
+
+
+def test_run_log_detail_renders_in_the_same_panel_as_its_button():
+    """详情曾被写进概览面板里默认折叠的 #output —— 按钮在推送面板,点了等于什么都没有。"""
+    html = TestClient(app).get("/config").text
+
+    assert _panel_of(html, 'id="run-log"') == "push"
+    assert _panel_of(html, 'id="run_log_out"') == "push"
+    assert _panel_of(html, 'id="run_log_line"') == "push"
+
+
+def test_run_log_output_is_not_inside_a_collapsed_details():
+    html = TestClient(app).get("/config").text
+
+    line = next(ln for ln in html.splitlines() if 'id="run_log_out"' in ln)
+    assert "<details" not in line, "运行日志详情不能藏在折叠区里"
+
+
+def test_run_log_js_writes_to_the_visible_element():
+    js = (main.STATIC_DIR / "config.js").read_text()
+
+    handler = js.split('$("run-log").onclick')[1].split("};")[0]
+    assert "runLogOut(" in handler, "详情必须写进 run_log_out"
+    assert "fmtRun" in handler

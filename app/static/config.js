@@ -253,31 +253,58 @@ $("check-files").onclick = async () => {
 function fmtRun(r) {
   const q = r.type_quota || {}, p = r.pushed_by_type || {};
   const f = r.files || {}, y = f.yaml || {}, z = f.zip || {};
+  const rules = r.rules || [];
+  // 覆盖率才是"每条规则有没有研判"的答案;narrated 只是本次新生成数,已有描述的会跳过
+  const narrCover = rules.filter((x) => x.narrated).length;
+  const wxCover = rules.filter((x) => x.whoisxml_confirmed).length;
+  const head = `#${r.id} ${fmtTime(r.started_at)} · ${r.trigger === "beat" ? "定时" : "手动"} · ${r.status}`;
   const bits = [
-    `#${r.id} ${fmtTime(r.started_at)} · ${r.trigger === "beat" ? "定时" : "手动"} · ${r.status}`,
+    head,
     r.reason ? `原因:${r.reason}` : null,
-    `富化 WhoisXML ${r.enrich_attempts ?? 0} 次 → 确认 ${r.confirmed ?? 0} 条` +
+    `富化 WhoisXML 查询 ${r.enrich_attempts ?? 0} 次 → 确认 ${r.confirmed ?? 0} 条` +
       (r.otx_only ? ` · OTX 单源补 ${r.otx_only} 条` : ""),
-    `LLM 描述 新生成 ${r.narrated ?? 0} · 失败 ${r.narrate_failed ?? 0} · 写入时仍缺 ${r.narrate_missing ?? 0}`,
+    rules.length ? `双源确认覆盖 ${wxCover}/${rules.length}` + (wxCover === 0 ? "(全部为 OTX 单源)" : "") : null,
+    rules.length ? `LLM 描述覆盖 ${narrCover}/${rules.length}` +
+      (narrCover < rules.length ? ` ⚠ 缺 ${rules.length - narrCover} 条` : "") +
+      ` · 本次新生成 ${r.narrated ?? 0} · 失败 ${r.narrate_failed ?? 0}` : null,
     `出规则 ${r.pushed ?? 0} 条(ip ${p.ip ?? 0}/${q.ip ?? 0} · 域名 ${p.domain ?? 0}/${q.domain ?? 0} · url ${p.url ?? 0}/${q.url ?? 0})`,
     y.exists ? `yaml ${y.name} · ${y.count} 条 · ${y.size}B · sha ${(y.sha256 || "").slice(0, 12)}` : "yaml 未生成",
     z.exists ? `zip  ${z.name} · ${z.size}B · sha ${(z.sha256 || "").slice(0, 12)}` : "zip 未生成",
     r.duration_ms != null ? `耗时 ${(r.duration_ms / 1000).toFixed(1)}s` : null,
   ].filter(Boolean);
   for (const n of r.notes || []) bits.push("· " + n);
+  if (rules.length) {
+    bits.push("规则清单:");
+    for (const x of rules) {
+      bits.push(`  ${x.narrated ? "✔" : "✘"} ${(x.type || "").padEnd(6)} ${x.value}` +
+        (x.whoisxml_confirmed ? "  [双源确认]" : ""));
+    }
+  }
   return bits.join("\n");
+}
+// 详情必须写在本面板内的可见元素里:#output 在概览面板且默认折叠,在这儿写等于不显示
+function runLogOut(text) {
+  const el = $("run_log_out");
+  el.textContent = text;
+  el.hidden = !text;
 }
 $("run-log").onclick = async () => {
   setStatus("run_log_line", "读取运行日志…");
+  runLogOut("");
   try {
     const r = await api("/pipeline/runs?limit=30");
     const runs = r.runs || [];
-    if (!runs.length) { setStatus("run_log_line", "暂无运行记录(流水线还没跑过)", ""); show("暂无运行记录"); return; }
+    if (!runs.length) {
+      setStatus("run_log_line", "暂无运行记录(流水线还没跑过)", "");
+      runLogOut("暂无运行记录。每日 23:00 自动执行,也可在「每日流水线」手动触发。");
+      return;
+    }
     const last = runs[0];
     setStatus("run_log_line", `最近 ${runs.length} 次运行 · 最新 ${fmtTime(last.started_at)} ${last.status} 出规则 ${last.pushed ?? 0} 条`,
       last.status === "success" ? "ok" : "err");
-    show(runs.map(fmtRun).join("\n\n"));
-  } catch (e) { setStatus("run_log_line", "读取失败", "err"); toast(e, "err"); show(e); }
+    runLogOut(runs.map(fmtRun).join("\n\n"));
+    show(runs);
+  } catch (e) { setStatus("run_log_line", "读取失败", "err"); runLogOut(""); toast(e, "err"); show(e); }
 };
 
 // 初始化
