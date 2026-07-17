@@ -1,5 +1,5 @@
 from app.db import SessionLocal
-from app.services.otx_source import sync_otx_to_misp
+from app.services.otx_source import sync_otx_direct
 from app.tasks.celery_app import celery_app
 
 
@@ -7,6 +7,6 @@ from app.tasks.celery_app import celery_app
 def sync_otx_task():
     db = SessionLocal()
     try:
-        return sync_otx_to_misp(db)
+        return sync_otx_direct(db)
     finally:
         db.close()

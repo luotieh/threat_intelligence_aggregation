@@ -3,7 +3,19 @@ from celery.schedules import crontab
 
 from app.config import settings
 
-celery_app = Celery("threat_intel_hub", broker=settings.redis_url, backend=settings.redis_url)
+# worker 启动只 import 本模块,不 include 的话任务模块永远不会被 import,
+# @celery_app.task 不执行 → 注册表为空 → beat 发来的任务全被 "unregistered" 丢弃。
+TASK_MODULES = [
+    "app.tasks.daily_pipeline",
+    "app.tasks.rule_archive",
+    "app.tasks.enrich_whoisxml",
+    "app.tasks.push_ta_node",
+    "app.tasks.sync_otx",
+    "app.tasks.sync_misp",
+]
+
+celery_app = Celery("threat_intel_hub", broker=settings.redis_url, backend=settings.redis_url,
+                    include=TASK_MODULES)
 
 # 定点调度按本地时区(用户在 Asia/Shanghai)
 celery_app.conf.timezone = "Asia/Shanghai"
