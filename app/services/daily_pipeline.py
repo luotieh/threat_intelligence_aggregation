@@ -39,15 +39,23 @@ def _sort_candidates(rows: list[IntelIndicator]) -> list[IntelIndicator]:
     return rows
 
 
-def _candidates_by_type(db: Session) -> dict[str, list[IntelIndicator]]:
-    """未富化的高危流量候选按 ip/domain/url 三类分组,每类按 confidence/last_seen 降序。"""
-    rows = (db.query(IntelIndicator)
+def _new_candidates_query(db: Session):
+    """高危流量候选,排除已出过规则的。
+
+    每日新增语义:发过的不再重复出规则,也不再浪费 WhoisXML 额度去查。
+    is_not(True) 而非 is_(False):兼容历史数据里可能的 NULL。
+    """
+    return (db.query(IntelIndicator)
             .filter(IntelIndicator.severity == "high",
                     IntelIndicator.to_ids.is_(True),
-                    IntelIndicator.normalized_type.in_(list(_CLASS_OF)))
-            .all())
+                    IntelIndicator.pushed_to_ta_node.is_not(True),
+                    IntelIndicator.normalized_type.in_(list(_CLASS_OF))))
+
+
+def _candidates_by_type(db: Session) -> dict[str, list[IntelIndicator]]:
+    """未富化、未出过规则的高危流量候选按 ip/domain/url 分组,每类按 confidence/last_seen 降序。"""
     pools: dict[str, list[IntelIndicator]] = {"ip": [], "domain": [], "url": []}
-    for r in rows:
+    for r in _new_candidates_query(db).all():
         if not _is_enriched(r):
             pools[_CLASS_OF[r.normalized_type]].append(r)
     for lst in pools.values():
@@ -83,15 +91,13 @@ def _pick_type(by_type: dict[str, list], quota: dict[str, int],
 
 
 def _fallback_fill(db: Session, by_type: dict[str, list], quota: dict[str, int], target: int) -> int:
-    """WhoisXML 无法确认时,用高危 OTX 候选(未交叉验证)按同一配额补足 target。返回补入条数。"""
+    """WhoisXML 无法确认时,用高危 OTX 候选(未交叉验证)按同一配额补足 target。返回补入条数。
+
+    同样排除已出过规则的:否则确认不了时每天都会挑中同一批头部候选,规则永不更新。
+    """
     selected = {id(i) for lst in by_type.values() for i in lst}
-    rows = (db.query(IntelIndicator)
-            .filter(IntelIndicator.severity == "high",
-                    IntelIndicator.to_ids.is_(True),
-                    IntelIndicator.normalized_type.in_(list(_CLASS_OF)))
-            .all())
     pools: dict[str, list[IntelIndicator]] = {"ip": [], "domain": [], "url": []}
-    for r in rows:
+    for r in _new_candidates_query(db).all():
         if id(r) not in selected:
             pools[_CLASS_OF[r.normalized_type]].append(r)
     for lst in pools.values():
@@ -211,6 +217,10 @@ def _run_daily_pipeline(db: Session, target: int | None, max_enrich: int | None,
     if _total(by_type) < target:
         added = _fallback_fill(db, by_type, quota, target)
         log["otx_only"] = added
+        if _total(by_type) < target:
+            # 新候选见底:如实少发,不拿旧规则凑数(已推送的一律不再入选)
+            log["notes"].append(
+                f"新候选不足,本次仅出规则 {_total(by_type)}/{target} 条(已出过规则的不再重复)")
         if added:
             log["notes"].append(f"WhoisXML 未确认部分用高危 OTX 单源候选补足 {added} 条")
 

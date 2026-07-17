@@ -257,3 +257,82 @@ def test_run_log_failure_never_loses_the_rule_file(db, make_indicator, monkeypat
 
     assert result["status"] == "success" and result["pushed"] == 1
     assert (tmp_path / "intel.yaml").exists()
+
+
+# ---- 每日新增语义:已推送过的不再重复出规则 ----
+
+def test_fallback_excludes_already_pushed(db, monkeypatch, tmp_path):
+    """WhoisXML 确认不了时的兜底,必须跳过已发过的,否则每天都是同一批规则。"""
+    from app.models import IntelIndicator
+
+    db.add(AppConfig(key="WHOISXML_API_KEY", value="k"))
+    db.add(AppConfig(key="IOC_OUTPUT_DIR", value=str(tmp_path)))
+    db.add(make_ind(value="old.com", normalized_value="old.com", confidence=99,
+                    pushed_to_ta_node=True))  # 置信最高,但已发过
+    db.add(make_ind(value="new.com", normalized_value="new.com", confidence=10))
+    db.commit()
+    _mute_io(monkeypatch)
+    monkeypatch.setattr(daily_pipeline, "query_whoisxml", lambda key, ioc: {"results": []})
+    written = {}
+    monkeypatch.setattr(daily_pipeline, "write_ta_node_ioc_files",
+                        lambda path, items: written.update({"v": [i["value"] for i in items]}))
+
+    run_daily_pipeline(db, target=1, max_enrich=5)
+
+    assert written["v"] == ["new.com"], "已推送的 old.com 不该再次出规则"
+    assert db.query(IntelIndicator).filter_by(normalized_value="new.com").one().pushed_to_ta_node
+
+
+def test_whoisxml_path_excludes_already_pushed(db, monkeypatch, tmp_path):
+    """已发过的也不该再耗 WhoisXML 额度去查。"""
+    db.add(AppConfig(key="WHOISXML_API_KEY", value="k"))
+    db.add(AppConfig(key="IOC_OUTPUT_DIR", value=str(tmp_path)))
+    db.add(make_ind(value="old.com", normalized_value="old.com", confidence=99,
+                    pushed_to_ta_node=True))
+    db.commit()
+    _mute_io(monkeypatch)
+    queried = []
+    monkeypatch.setattr(daily_pipeline, "query_whoisxml",
+                        lambda key, ioc: queried.append(ioc) or {"results": []})
+    monkeypatch.setattr(daily_pipeline, "write_ta_node_ioc_files", lambda path, items: None)
+
+    run_daily_pipeline(db, target=1, max_enrich=5)
+
+    assert queried == [], "已推送的不该再查 WhoisXML"
+
+
+def test_pipeline_reports_shortfall_when_new_candidates_run_out(db, monkeypatch, tmp_path):
+    """新候选不够时如实少发并留痕,不能悄悄拿旧规则凑数。"""
+    db.add(AppConfig(key="WHOISXML_API_KEY", value="k"))
+    db.add(AppConfig(key="IOC_OUTPUT_DIR", value=str(tmp_path)))
+    db.add(make_ind(value="only.com", normalized_value="only.com", confidence=50))
+    db.commit()
+    _mute_io(monkeypatch)
+    monkeypatch.setattr(daily_pipeline, "query_whoisxml", lambda key, ioc: {"results": []})
+    monkeypatch.setattr(daily_pipeline, "write_ta_node_ioc_files", lambda path, items: None)
+
+    result = run_daily_pipeline(db, target=10, max_enrich=5)
+
+    assert result["pushed"] == 1
+    assert any("新候选不足" in n for n in result["notes"])
+
+
+def test_second_run_produces_different_rules(db, monkeypatch, tmp_path):
+    """连跑两次:第二次必须换一批,这正是"排除已推送"要达到的效果。"""
+    db.add(AppConfig(key="WHOISXML_API_KEY", value="k"))
+    db.add(AppConfig(key="IOC_OUTPUT_DIR", value=str(tmp_path)))
+    for i in range(4):
+        db.add(make_ind(value=f"d{i}.com", normalized_value=f"d{i}.com", confidence=90 - i))
+    db.commit()
+    _mute_io(monkeypatch)
+    monkeypatch.setattr(daily_pipeline, "query_whoisxml", lambda key, ioc: {"results": []})
+    batches = []
+    monkeypatch.setattr(daily_pipeline, "write_ta_node_ioc_files",
+                        lambda path, items: batches.append(sorted(i["value"] for i in items)))
+
+    run_daily_pipeline(db, target=2, max_enrich=10)
+    run_daily_pipeline(db, target=2, max_enrich=10)
+
+    assert batches[0] == ["d0.com", "d1.com"]
+    assert batches[1] == ["d2.com", "d3.com"]
+    assert not set(batches[0]) & set(batches[1]), "两批规则不得重叠"
