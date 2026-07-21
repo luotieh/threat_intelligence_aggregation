@@ -94,8 +94,8 @@ def health_threatbook(db: Session = Depends(get_db)):
         proxies = {"https": proxy} if proxy else None
         resp = sync_requests.post(
             "https://api.threatbook.cn/v3/ip/query",
-            params={"apikey": s.threatbook_api_key},
-            json={"resource": "8.8.8.8", "lang": "zh"},
+            params={"apikey": s.threatbook_api_key, "resource": "8.8.8.8"},
+            json={"lang": "zh"},
             timeout=15,
             proxies=proxies,
         )
