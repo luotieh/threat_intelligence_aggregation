@@ -12,7 +12,7 @@ from app.services.threatbook import (
     gang_tags_of,
     map_hit,
     parse_ips,
-    query_scene_dns,
+    query_ip_info,
     summarize,
 )
 
@@ -48,7 +48,7 @@ def threatbook_query(payload: QueryRequest, db: Session = Depends(get_db)):
     for i in range(0, len(ips), BATCH_SIZE):
         chunk = ips[i:i + BATCH_SIZE]
         try:
-            hits = query_scene_dns(api_key, chunk)
+            hits = query_ip_info(api_key, chunk)
         except Exception as exc:  # noqa: BLE001 - 单批失败不拖垮整次研判,交给前端提示
             failed_batches += 1
             for ip in chunk:

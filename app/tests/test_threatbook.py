@@ -87,7 +87,7 @@ def _query_endpoint(monkeypatch, db, ips_text, hits):
     from app.api.threatbook import QueryRequest, threatbook_query
 
     monkeypatch.setenv("THREATBOOK_API_KEY", "test-key")
-    monkeypatch.setattr("app.api.threatbook.query_scene_dns", lambda key, ips: hits)
+    monkeypatch.setattr("app.api.threatbook.query_ip_info", lambda key, ips: hits)
     return threatbook_query(QueryRequest(ips_text=ips_text), db)
 
 
@@ -117,7 +117,7 @@ def test_query_endpoint_batch_failure_isolated(monkeypatch, db):
     def boom(key, ips):
         raise RuntimeError("quota exceeded")
 
-    monkeypatch.setattr("app.api.threatbook.query_scene_dns", boom)
+    monkeypatch.setattr("app.api.threatbook.query_ip_info", boom)
     resp = threatbook_query(QueryRequest(ips_text="1.2.3.4"), db)
     assert resp["failed_batches"] == 1 and resp["errors"] == 1
     assert resp["results"][0]["error"] == "quota exceeded"

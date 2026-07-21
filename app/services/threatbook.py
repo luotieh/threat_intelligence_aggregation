@@ -58,18 +58,32 @@ def parse_ips(lines: Iterable[str]) -> tuple[list[str], list[str]]:
     return list(dict.fromkeys(ips)), skipped
 
 
-def query_scene_dns(api_key: str, ips: list[str]) -> dict:
-    """调 /v3/scene/dns 批量查询,返回 data.ips(key=ip 的研判结果 map)。
+def query_ip_info(api_key: str, ips: list[str]) -> dict:
+    """调 /v3/ip/query 逐个查询 IP 威胁情报,返回 {ip: hit} 的研判结果 map。
 
-    注意:scene 接口按账号套餐开放;请求体 {"apikey","ips"} 按文档示例,
-    无权限时需改用 /v3/scene/ip_reputation。
+    ip/query 是 ThreatBook 基础威胁情报 IP 查询接口,按次计费。
+    每个 IP 独立请求,单次返回该 IP 的 judgments/severity/tags_classes 等完整情报。
     """
-    resp = requests.post(f"{TB_API}/scene/dns", json={"apikey": api_key, "ips": ips, "lang": "zh"}, timeout=60)
-    resp.raise_for_status()
-    data = resp.json()
-    if data.get("response_code") != 0:
-        raise RuntimeError(f"ThreatBook 返回错误: {data.get('response_code')} {data.get('verbose_msg')}")
-    return (data.get("data") or {}).get("ips") or {}
+    results = {}
+    for ip in ips:
+        try:
+            resp = requests.post(
+                f"{TB_API}/ip/query",
+                json={"apikey": api_key, "ip": ip, "lang": "zh"},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("response_code") != 0:
+                raise RuntimeError(f"ThreatBook 返回错误: {data.get('response_code')} {data.get('verbose_msg')}")
+            # ip/query 的 data 字段可能是 {ip: {...}} 或直接 {...},兼容两种
+            hit = (data.get("data") or {})
+            if isinstance(hit, dict) and ip in hit and isinstance(hit[ip], dict):
+                hit = hit[ip]
+            results[ip] = hit
+        except Exception:
+            continue
+    return results
 
 
 def gang_tags_of(hit: dict) -> list[str]:

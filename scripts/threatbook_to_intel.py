@@ -38,7 +38,7 @@ from app.services.threatbook import (  # noqa: E402
     build_intel_yaml,
     build_intel_zip,
     parse_ips,
-    query_scene_dns,
+    query_ip_info,
     summarize,
 )
 
@@ -80,7 +80,7 @@ def main() -> int:
         for i in range(0, len(missing), batch_size):
             chunk = missing[i:i + batch_size]
             try:
-                for ip, hit in query_scene_dns(api_key, chunk).items():
+                for ip, hit in query_ip_info(api_key, chunk).items():
                     cache[ip] = hit
             except Exception as exc:  # noqa: BLE001 - 保存已查到的缓存再退出
                 print(f"[fail] 查询批次 {i // batch_size}: {exc}", file=sys.stderr)
