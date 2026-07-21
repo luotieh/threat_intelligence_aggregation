@@ -1,4 +1,6 @@
+import json
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -19,6 +21,19 @@ from app.services.threatbook import (
     query_ip_info,
     summarize,
 )
+
+AUDIT_FILE = "threatbook_audit.jsonl"
+
+
+def _audit_log(db: Session, entry: dict) -> None:
+    """追加一条审计记录到 IOC_OUTPUT_DIR 下的 JSONL 文件。"""
+    s = get_effective_settings(db)
+    out_dir = Path(s.ioc_output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    entry["ts"] = datetime.now(timezone.utc).isoformat()
+    with open(out_dir / AUDIT_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
 
 router = APIRouter()
 
@@ -78,7 +93,7 @@ def threatbook_query(payload: QueryRequest, db: Session = Depends(get_db)):
                 "hit": hit,  # 原样保留,供 /threatbook/generate 回传,避免二次查询
             })
     malicious = sum(1 for r in results if r.get("is_malicious"))
-    return {
+    resp = {
         "total": len(ips),
         "malicious": malicious,
         "benign": sum(1 for r in results if r.get("is_malicious") is False),
@@ -87,6 +102,8 @@ def threatbook_query(payload: QueryRequest, db: Session = Depends(get_db)):
         "failed_batches": failed_batches,
         "results": results,
     }
+    _audit_log(db, {"type": "query", "ips": ips, "total": resp["total"], "malicious": resp["malicious"], "benign": resp["benign"], "errors": resp["errors"]})
+    return resp
 
 
 @router.post("/threatbook/generate")
@@ -177,7 +194,7 @@ def manual_add(payload: ManualAddRequest, db: Session = Depends(get_db)):
     zip_path = out_dir / base.with_suffix(".zip").name
     yaml_path.write_text(yaml_text, encoding="utf-8")
     zip_path.write_bytes(build_intel_zip(yaml_text, arcname=base.with_suffix(".yaml").name))
-    return {
+    resp = {
         "status": "ok",
         "ip": payload.ip,
         "category": item["category"],
@@ -185,3 +202,24 @@ def manual_add(payload: ManualAddRequest, db: Session = Depends(get_db)):
         "yaml": str(yaml_path),
         "zip": str(zip_path),
     }
+    _audit_log(db, {"type": "manual", "ip": payload.ip, "category": payload.category, "severity": payload.severity, "judgments": payload.judgments})
+    return resp
+
+
+@router.get("/threatbook/logs")
+def threatbook_logs(db: Session = Depends(get_db), limit: int = 50):
+    """读取研判审计日志,最新在前。"""
+    s = get_effective_settings(db)
+    log_path = Path(s.ioc_output_dir) / AUDIT_FILE
+    if not log_path.exists():
+        return {"logs": []}
+    lines = log_path.read_text(encoding="utf-8").strip().split("\n")
+    entries = []
+    for line in reversed(lines):
+        if not line.strip():
+            continue
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return {"logs": entries[:limit]}

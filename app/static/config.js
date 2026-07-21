@@ -317,6 +317,18 @@ async function tbStatus() {
     const r = await api("/threatbook/status");
     setStatus("tb_key_status", r.configured ? "✓ ThreatBook API Key 已配置" : "✗ 未配置 ThreatBook API Key —— 请到「情报源」页填写并保存", r.configured ? "ok" : "err");
   } catch (e) { setStatus("tb_key_status", "状态获取失败", "err"); }
+  loadTbLogs();
+}
+function fmtTbLog(e) {
+  if (e.type === "query") return `${fmtTime(e.ts)} 云端研判 ${e.ips?.length || 0} 个IP → 恶意${e.malicious} 非恶意${e.benign} 失败${e.errors}`;
+  return `${fmtTime(e.ts)} 手动录入 ${e.ip} ${e.category}/${e.severity}`;
+}
+async function loadTbLogs() {
+  try {
+    const r = await api("/threatbook/logs?limit=50");
+    const logs = r.logs || [];
+    $("tb_audit").textContent = logs.length ? logs.map(fmtTbLog).join("\n") : "暂无记录";
+  } catch (e) { $("tb_audit").textContent = "加载失败"; }
 }
 function tbSevBadge(r) {
   if (r.error) return '<span class="badge warn"><span class="dot"></span>查询失败</span>';
@@ -348,6 +360,7 @@ $("tb-query").onclick = async () => {
     const r = await api("/threatbook/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ips_text: text }) });
     tbResults = r.results || [];
     renderTb(r);
+    loadTbLogs();
     const m = `研判完成:恶意 ${r.malicious},非恶意 ${r.benign},失败 ${r.errors}` + (r.failed_batches ? `(${r.failed_batches} 个批次失败)` : "");
     setStatus("tb_status", m, r.errors ? "err" : "ok");
     toast(m, r.errors ? "err" : "ok");
@@ -389,6 +402,7 @@ $("man-add").onclick = async () => {
     const r = await api("/threatbook/manual-add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     setStatus("man_status", `✓ ${r.ip} ${r.category}/${r.severity} 已写入 ${r.zip}`, "ok");
     toast(`已添加 ${r.ip} → 网闸目录`, "ok");
+    loadTbLogs();
     show(r);
   } catch (e) { setStatus("man_status", "✗ 添加失败", "err"); toast(e, "err"); show(e); }
 };
