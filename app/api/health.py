@@ -9,6 +9,7 @@ from app.services.llm import llm_health
 from app.services.misp_client import check_misp_health
 
 import httpx
+import requests as sync_requests
 
 router = APIRouter()
 
@@ -89,25 +90,21 @@ def health_threatbook(db: Session = Depends(get_db)):
     if not s.threatbook_api_key:
         return {"status": "unconfigured", "error": "THREATBOOK_API_KEY 未配置", "debug": dbg}
     try:
-        with httpx.Client(timeout=15, proxy=_outbound_proxy()) as client:
-            response = client.post(
-                "https://api.threatbook.cn/v3/scene/dns",
-                json={"apikey": s.threatbook_api_key, "ips": ["8.8.8.8"], "lang": "zh"},
-            )
-            response.raise_for_status()
-            data = response.json()
-            code = data.get("response_code")
-            if code != 0:
-                msg = data.get("verbose_msg") or "未知错误"
-                return {"status": "failed", "error": f"ThreatBook({code}): {msg}", "debug": dbg}
+        proxy = _outbound_proxy()
+        proxies = {"https": proxy} if proxy else None
+        resp = sync_requests.post(
+            "https://api.threatbook.cn/v3/scene/dns",
+            json={"apikey": s.threatbook_api_key, "ips": ["8.8.8.8"], "lang": "zh"},
+            timeout=15,
+            proxies=proxies,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        code = data.get("response_code")
+        if code != 0:
+            msg = data.get("verbose_msg") or "未知错误"
+            return {"status": "failed", "error": f"ThreatBook({code}): {msg}", "debug": dbg}
         return {"status": "ok"}
-    except httpx.HTTPStatusError as exc:
-        body = ""
-        try:
-            body = exc.response.text[:500]
-        except Exception:
-            pass
-        return {"status": "failed", "error": f"HTTP {exc.response.status_code}: {body}", "debug": dbg}
     except Exception as exc:
         return {"status": "failed", "error": f"{type(exc).__name__}: {exc}", "debug": dbg}
 
