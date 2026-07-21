@@ -77,8 +77,17 @@ def health_whoisxml(db: Session = Depends(get_db)):
 @router.get("/health/threatbook")
 def health_threatbook(db: Session = Depends(get_db)):
     s = get_effective_settings(db)
+    key_len = len(s.threatbook_api_key) if s.threatbook_api_key else 0
+    key_preview = s.threatbook_api_key[:4] if s.threatbook_api_key and len(s.threatbook_api_key) >= 4 else (s.threatbook_api_key or "")
+    env_val = os.environ.get("THREATBOOK_API_KEY")
+    dbg = {
+        "key_len": key_len,
+        "key_preview": key_preview + ("…" if key_len > 4 else ""),
+        "env_exists": "THREATBOOK_API_KEY" in os.environ,
+        "env_val_empty": env_val == "" if env_val is not None else "not_set",
+    }
     if not s.threatbook_api_key:
-        return {"status": "unconfigured", "error": "THREATBOOK_API_KEY 未配置"}
+        return {"status": "unconfigured", "error": "THREATBOOK_API_KEY 未配置", "debug": dbg}
     try:
         with httpx.Client(timeout=15, proxy=_outbound_proxy()) as client:
             response = client.post(
@@ -90,7 +99,7 @@ def health_threatbook(db: Session = Depends(get_db)):
             code = data.get("response_code")
             if code != 0:
                 msg = data.get("verbose_msg") or "未知错误"
-                return {"status": "failed", "error": f"ThreatBook({code}): {msg}"}
+                return {"status": "failed", "error": f"ThreatBook({code}): {msg}", "debug": dbg}
         return {"status": "ok"}
     except httpx.HTTPStatusError as exc:
         body = ""
@@ -98,9 +107,9 @@ def health_threatbook(db: Session = Depends(get_db)):
             body = exc.response.text[:500]
         except Exception:
             pass
-        return {"status": "failed", "error": f"HTTP {exc.response.status_code}: {body}"}
+        return {"status": "failed", "error": f"HTTP {exc.response.status_code}: {body}", "debug": dbg}
     except Exception as exc:
-        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}", "debug": dbg}
 
 
 @router.get("/health/llm")
