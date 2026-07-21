@@ -90,11 +90,10 @@ def threatbook_query(payload: QueryRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/threatbook/generate")
-def threatbook_generate(payload: GenerateRequest, fmt: str = "yaml", db: Session = Depends(get_db)):
-    """把研判结果中判定恶意的 IP 生成 intel.yaml / intel.zip,附件下载 + 落盘网闸目录。
+def threatbook_generate(payload: GenerateRequest, fmt: str = "yaml", save_to_gate: bool = False, db: Session = Depends(get_db)):
+    """把研判结果中判定恶意的 IP 生成 intel.yaml / intel.zip 下载。
 
-    写入 IOC_OUTPUT_DIR 目录,文件名取 IOC_RULE_FILENAME(默认 intel.yaml/.zip),
-    与流水线推送使用同一目录,由网闸同步到内网。
+    若 save_to_gate=true,同时写入 IOC_OUTPUT_DIR 网闸目录。
     """
     s = get_effective_settings(db)
     items = []
@@ -113,7 +112,7 @@ def threatbook_generate(payload: GenerateRequest, fmt: str = "yaml", db: Session
             except Exception:
                 pass
     yaml_text = build_intel_yaml(items)
-    if items:
+    if save_to_gate and items:
         out_dir = Path(s.ioc_output_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         base = Path(s.ioc_rule_filename)

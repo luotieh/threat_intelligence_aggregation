@@ -357,7 +357,8 @@ $("tb-query").onclick = async () => {
 };
 async function tbDownload(fmt) {
   try {
-    const response = await fetch(`/threatbook/generate?fmt=${fmt}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ results: tbResults }) });
+    const save = $("tb_save_gate").checked;
+    const response = await fetch(`/threatbook/generate?fmt=${fmt}&save_to_gate=${save}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ results: tbResults }) });
     if (!response.ok) throw await response.json().catch(() => response.statusText);
     const blob = await response.blob();
     const a = document.createElement("a");
@@ -365,7 +366,8 @@ async function tbDownload(fmt) {
     a.download = fmt === "zip" ? "intel.zip" : "intel.yaml";
     a.click();
     URL.revokeObjectURL(a.href);
-    toast(`已下载 intel.${fmt}(仅含恶意项,可到「推送规则」页上传进网闸目录)`, "ok");
+    const extra = save ? " · 已落盘网闸目录" : "";
+    toast(`已下载 intel.${fmt}(仅含恶意项)${extra}`, "ok");
   } catch (e) { toast(e, "err"); show(e); }
 }
 $("tb-dl-yaml").onclick = () => tbDownload("yaml");
