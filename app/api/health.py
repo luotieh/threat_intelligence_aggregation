@@ -74,6 +74,26 @@ def health_whoisxml(db: Session = Depends(get_db)):
         return {"status": "failed", "error": str(exc)}
 
 
+@router.get("/health/threatbook")
+def health_threatbook(db: Session = Depends(get_db)):
+    s = get_effective_settings(db)
+    if not s.threatbook_api_key:
+        return {"status": "unconfigured", "error": "THREATBOOK_API_KEY 未配置"}
+    try:
+        with httpx.Client(timeout=15, proxy=_outbound_proxy()) as client:
+            response = client.post(
+                "https://api.threatbook.cn/v3/scene/dns",
+                json={"apikey": s.threatbook_api_key, "ips": ["1.1.1.1"], "lang": "zh"},
+            )
+            response.raise_for_status()
+            data = response.json()
+            if data.get("response_code") != 0:
+                return {"status": "failed", "error": f"ThreatBook: {data.get('verbose_msg', '未知错误')}"}
+        return {"status": "ok"}
+    except Exception as exc:
+        return {"status": "failed", "error": str(exc)}
+
+
 @router.get("/health/llm")
 def health_llm(db: Session = Depends(get_db)):
     return llm_health(db)

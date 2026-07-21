@@ -88,7 +88,7 @@ class Settings:
 
 
 def value_for(key: str, db_values: dict[str, str] | None = None) -> str:
-    if key in os.environ:
+    if key in os.environ and os.environ[key]:
         return os.environ[key]
     if db_values and db_values.get(key) not in (None, ""):
         return str(db_values[key])
