@@ -59,6 +59,9 @@ def threatbook_query(payload: QueryRequest, db: Session = Depends(get_db)):
             if hit is None:
                 results.append({"ip": ip, "error": "接口未返回该 IP 的结果"})
                 continue
+            if isinstance(hit, dict) and "_error" in hit:
+                results.append({"ip": ip, "error": hit["_error"]})
+                continue
             results.append({
                 "ip": ip,
                 "is_malicious": bool(hit.get("is_malicious")),

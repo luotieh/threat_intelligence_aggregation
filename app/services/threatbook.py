@@ -76,14 +76,21 @@ def query_ip_info(api_key: str, ips: list[str]) -> dict:
             resp.raise_for_status()
             data = resp.json()
             if data.get("response_code") != 0:
-                raise RuntimeError(f"ThreatBook 返回错误: {data.get('response_code')} {data.get('verbose_msg')}")
-            # ip/query 的 data 字段可能是 {ip: {...}} 或直接 {...},兼容两种
-            hit = (data.get("data") or {})
-            if isinstance(hit, dict) and ip in hit and isinstance(hit[ip], dict):
-                hit = hit[ip]
+                results[ip] = {"_error": f"ThreatBook({data.get('response_code')}): {data.get('verbose_msg', '')}"}
+                continue
+            # ip/query 的 data 可能是: {"ip": {info}} / {info} / 嵌套在 ips 下
+            raw = data.get("data") or {}
+            hit = {}
+            if isinstance(raw, dict):
+                if ip in raw and isinstance(raw[ip], dict):
+                    hit = raw[ip]
+                elif "ips" in raw and isinstance(raw["ips"], dict) and ip in raw["ips"]:
+                    hit = raw["ips"][ip]
+                elif any(k in raw for k in ("is_malicious", "judgments", "severity")):
+                    hit = raw
             results[ip] = hit
-        except Exception:
-            continue
+        except Exception as exc:
+            results[ip] = {"_error": str(exc)}
     return results
 
 
