@@ -81,7 +81,8 @@ def threatbook_query(payload: QueryRequest, db: Session = Depends(get_db)):
             if isinstance(hit, dict) and "_error" in hit:
                 results.append({"ip": ip, "error": hit["_error"]})
                 continue
-            results.append({
+            mapped = map_hit(hit)
+            row = {
                 "ip": ip,
                 "is_malicious": bool(hit.get("is_malicious")),
                 "severity_raw": hit.get("severity"),
@@ -89,9 +90,22 @@ def threatbook_query(payload: QueryRequest, db: Session = Depends(get_db)):
                 "judgments": hit.get("judgments") or [],
                 "gang_tags": gang_tags_of(hit),
                 "permalink": hit.get("permalink") or f"https://x.threatbook.com/v5/ip/{ip}",
-                **map_hit(hit),
-                "hit": hit,  # 原样保留,供 /threatbook/generate 回传,避免二次查询
-            })
+                **mapped,
+                "hit": hit,
+                "narrative": "",
+            }
+            # 恶意 IP 尝试 LLM 描述
+            if row["is_malicious"]:
+                s = get_effective_settings(db)
+                if s.llm_enabled and s.llm_api_key:
+                    try:
+                        item = summarize(ip, hit)
+                        text = build_narrative(db, item["evidence"], ip)
+                        if text and len(text) >= 20:
+                            row["narrative"] = text
+                    except Exception:
+                        pass
+            results.append(row)
     malicious = sum(1 for r in results if r.get("is_malicious"))
     resp = {
         "total": len(ips),

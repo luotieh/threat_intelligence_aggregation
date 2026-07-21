@@ -338,18 +338,20 @@ function tbSevBadge(r) {
 }
 function renderTb(resp) {
   const rows = resp.results.map((r) => {
-    if (r.error) return `<tr><td></td><td class="mono">${esc(r.ip)}</td><td>${tbSevBadge(r)}</td><td colspan="6">${esc(r.error)}</td></tr>`;
+    if (r.error) return `<tr><td></td><td class="mono">${esc(r.ip)}</td><td>${tbSevBadge(r)}</td><td colspan="7">${esc(r.error)}</td></tr>`;
     const chk = r.is_malicious ? `<input type="checkbox" class="tb-chk" data-ip="${esc(r.ip)}">` : "";
+    const narr = r.narrative ? esc(r.narrative) : '<span class="muted">—</span>';
     return `<tr><td>${chk}</td><td class="mono">${esc(r.ip)}</td><td>${tbSevBadge(r)}</td>` +
       `<td>${esc((r.judgments || []).join(", ") || "—")}</td>` +
       `<td><span class="sev ${esc(r.severity)}">${esc(r.severity)}</span> <span class="muted">${esc(r.severity_raw || "")}</span></td>` +
       `<td>${esc(r.confidence_level || "—")}</td><td>${esc(r.category)}</td><td>${esc(r.recommended_action)}</td>` +
+      `<td class="narr">${narr}</td>` +
       `<td><a href="${esc(r.permalink)}" target="_blank" rel="noopener">详情</a></td></tr>`;
   });
   const skip = (resp.skipped_input || []).length ? ` · 跳过非法行 ${resp.skipped_input.length}` : "";
   $("tb_meta").textContent = `共 ${resp.total} 个 · 恶意 ${resp.malicious} · 非恶意 ${resp.benign} · 失败 ${resp.errors}${skip}`;
   $("tb_table").innerHTML = rows.length
-    ? `<div class="table-wrap"><table><thead><tr><th></th><th>IP</th><th>判定</th><th>威胁类型</th><th>危险度</th><th>可信度</th><th>category</th><th>建议动作</th><th>微步详情</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`
+    ? `<div class="table-wrap"><table><thead><tr><th></th><th>IP</th><th>判定</th><th>威胁类型</th><th>危险度</th><th>可信度</th><th>category</th><th>建议动作</th><th>LLM 描述</th><th>微步详情</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`
     : "";
 }
 $("tb-query").onclick = async () => {
