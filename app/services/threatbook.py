@@ -70,7 +70,7 @@ def query_ip_info(api_key: str, ips: list[str]) -> dict:
             resp = requests.post(
                 f"{TB_API}/ip/query",
                 params={"apikey": api_key},
-                json={"ip": ip, "lang": "zh"},
+                json={"resource": ip, "lang": "zh"},
                 timeout=30,
             )
             resp.raise_for_status()
