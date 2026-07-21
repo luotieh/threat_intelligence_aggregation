@@ -367,6 +367,36 @@
               <div class="muted" id="tb_meta" style="margin:14px 0 8px"></div>
               <div id="tb_table"></div>
             </div>
+
+            <div class="card" style="margin-top:18px">
+              <h2>📝 手动录入恶意 IP（API 额度用完后）</h2>
+              <p class="desc">从微步 Web 控制台查到恶意 IP 后,直接在此填写 IP + 威胁类型,生成规则并上传网闸目录。</p>
+              <div class="card-row">
+                <label>IP 地址 <input id="man_ip" placeholder="1.2.3.4"></label>
+                <label>类型
+                  <select id="man_category">
+                    <option value="c2">C2</option>
+                    <option value="botnet">僵尸网络</option>
+                    <option value="phishing">钓鱼</option>
+                    <option value="malware" selected>恶意软件</option>
+                    <option value="scanner">扫描器</option>
+                  </select>
+                </label>
+                <label>危险度
+                  <select id="man_severity">
+                    <option value="high" selected>high</option>
+                    <option value="medium">medium</option>
+                    <option value="low">low</option>
+                  </select>
+                </label>
+                <label>威胁标签 <input id="man_judgments" placeholder="C2,Scanner(逗号分隔)"></label>
+                <label>描述 <input id="man_desc" placeholder="选填:补充说明"></label>
+              </div>
+              <div class="actions">
+                <button class="btn" id="man-add">添加到规则</button>
+              </div>
+              <div class="status" id="man_status"></div>
+            </div>
           </section>
 
         </div>

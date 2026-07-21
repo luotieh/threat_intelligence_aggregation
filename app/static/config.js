@@ -371,5 +371,25 @@ async function tbDownload(fmt) {
 $("tb-dl-yaml").onclick = () => tbDownload("yaml");
 $("tb-dl-zip").onclick = () => tbDownload("zip");
 
+// ---- 手动录入恶意IP ----
+$("man-add").onclick = async () => {
+  const ip = $("man_ip").value.trim();
+  if (!ip) { toast("请填写 IP 地址", "err"); return; }
+  setStatus("man_status", "生成规则…");
+  try {
+    const body = {
+      ip,
+      category: $("man_category").value,
+      severity: $("man_severity").value,
+      judgments: ($("man_judgments").value || "").split(",").map(s => s.trim()).filter(Boolean),
+      description: $("man_desc").value.trim(),
+    };
+    const r = await api("/threatbook/manual-add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    setStatus("man_status", `✓ ${r.ip} ${r.category}/${r.severity} 已写入 ${r.zip}`, "ok");
+    toast(`已添加 ${r.ip} → 网闸目录`, "ok");
+    show(r);
+  } catch (e) { setStatus("man_status", "✗ 添加失败", "err"); toast(e, "err"); show(e); }
+};
+
 // 初始化
 loadConfig().then(loadOverview).catch((e) => toast(e, "err"));

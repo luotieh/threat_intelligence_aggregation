@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -86,17 +89,27 @@ def threatbook_query(payload: QueryRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/threatbook/generate")
-def threatbook_generate(payload: GenerateRequest, fmt: str = "yaml"):
-    """把研判结果中判定恶意的 IP 生成 intel.yaml / intel.zip,以附件形式下载。
+def threatbook_generate(payload: GenerateRequest, fmt: str = "yaml", db: Session = Depends(get_db)):
+    """把研判结果中判定恶意的 IP 生成 intel.yaml / intel.zip,附件下载 + 落盘网闸目录。
 
-    只产出下载文件,不写服务器磁盘、不覆盖平台正在推送的规则文件。
+    写入 IOC_OUTPUT_DIR 目录,文件名取 IOC_RULE_FILENAME(默认 intel.yaml/.zip),
+    与流水线推送使用同一目录,由网闸同步到内网。
     """
+    s = get_effective_settings(db)
     items = []
     for r in payload.results:
         hit = r.get("hit")
         if r.get("is_malicious") and isinstance(hit, dict) and r.get("ip"):
             items.append(summarize(r["ip"], hit))
     yaml_text = build_intel_yaml(items)
+    if items:
+        out_dir = Path(s.ioc_output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        base = Path(s.ioc_rule_filename)
+        yaml_path = out_dir / base.with_suffix(".yaml").name
+        zip_path = out_dir / base.with_suffix(".zip").name
+        yaml_path.write_text(yaml_text, encoding="utf-8")
+        zip_path.write_bytes(build_intel_zip(yaml_text, arcname=base.with_suffix(".yaml").name))
     if fmt == "zip":
         return Response(
             content=build_intel_zip(yaml_text),
@@ -108,3 +121,49 @@ def threatbook_generate(payload: GenerateRequest, fmt: str = "yaml"):
         media_type="text/yaml; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="intel.yaml"'},
     )
+
+
+class ManualAddRequest(BaseModel):
+    ip: str
+    category: str = "malware"
+    severity: str = "high"
+    judgments: list[str] = []
+    description: str = ""
+
+
+@router.post("/threatbook/manual-add")
+def manual_add(payload: ManualAddRequest, db: Session = Depends(get_db)):
+    """手动录入恶意 IP（API 额度用完后从微步 Web 控制台查询的结果）。
+
+    根据手动填写的 IP + 威胁信息生成规则,写入网闸目录。
+    """
+    s = get_effective_settings(db)
+    hit = {
+        "is_malicious": True,
+        "severity": payload.severity,
+        "judgments": payload.judgments or [payload.category],
+        "confidence_level": "high",
+        "tags_classes": [],
+        "permalink": "",
+    }
+    item = summarize(payload.ip, hit)
+    if payload.description:
+        item["description"] = payload.description
+        item["evidence"]["narrative"] = payload.description
+
+    yaml_text = build_intel_yaml([item])
+    out_dir = Path(s.ioc_output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    base = Path(s.ioc_rule_filename)
+    yaml_path = out_dir / base.with_suffix(".yaml").name
+    zip_path = out_dir / base.with_suffix(".zip").name
+    yaml_path.write_text(yaml_text, encoding="utf-8")
+    zip_path.write_bytes(build_intel_zip(yaml_text, arcname=base.with_suffix(".yaml").name))
+    return {
+        "status": "ok",
+        "ip": payload.ip,
+        "category": item["category"],
+        "severity": item["severity"],
+        "yaml": str(yaml_path),
+        "zip": str(zip_path),
+    }
