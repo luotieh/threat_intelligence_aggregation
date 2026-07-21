@@ -6,7 +6,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.api import config, enrich, exports, health, indicators, push, sync
+from app.api import config, enrich, exports, health, indicators, push, sync, threatbook
 from app.db import init_db
 
 STATIC_DIR = Path("app/static")
@@ -33,6 +33,7 @@ app.include_router(push.router)
 app.include_router(enrich.router)
 app.include_router(exports.router)
 app.include_router(config.router)
+app.include_router(threatbook.router)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 

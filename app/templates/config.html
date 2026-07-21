@@ -95,9 +95,10 @@
 
       /* Forms */
       label { display: grid; gap: 6px; font-size: 12.5px; color: var(--text-dim); font-weight: 500; }
-      input, select { height: 40px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      input, select, textarea { height: 40px; border: 1px solid var(--border); border-radius: var(--radius-sm);
         padding: 0 12px; font: inherit; background: var(--surface); color: var(--text); transition: .12s; width: 100%; }
-      input:focus, select:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+      textarea { height: auto; padding: 10px 12px; font-family: var(--mono); font-size: 12.5px; resize: vertical; }
+      input:focus, select:focus, textarea:focus { outline: 0; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
       input[type="checkbox"] { width: 20px; height: 20px; justify-self: start; accent-color: var(--accent); }
       input[type="file"] { padding: 8px; height: auto; }
       .switch { display: flex; align-items: center; gap: 10px; }
@@ -179,6 +180,7 @@
           <button class="nav-item" data-panel="pipeline"><span class="ic">⚙️</span> 每日流水线</button>
           <button class="nav-item" data-panel="push"><span class="ic">📤</span> 推送规则</button>
           <button class="nav-item" data-panel="intel"><span class="ic">🎯</span> 情报列表</button>
+          <button class="nav-item" data-panel="threatbook"><span class="ic">🔍</span> 微步研判</button>
         </nav>
         <div class="sidebar-foot">
           <span>v2026.07</span>
@@ -235,6 +237,7 @@
               <div class="card-row">
                 <label>OTX API Key <input id="otx_api_key" type="password" placeholder="******"></label>
                 <label>WhoisXML API Key <input id="whoisxml_api_key" type="password" placeholder="******"></label>
+                <label>ThreatBook API Key <input id="threatbook_api_key" type="password" placeholder="******"></label>
               </div>
               <div class="actions">
                 <button class="btn" id="save-sources">保存 Key</button>
@@ -342,6 +345,26 @@
               </div>
               <div class="muted" id="top_meta" style="margin:14px 0 8px"></div>
               <div id="top_table"></div>
+            </div>
+          </section>
+
+          <!-- 微步研判 -->
+          <section id="panel-threatbook" class="panel">
+            <div class="card">
+              <h2>微步在线 ThreatBook 可疑 IP 研判</h2>
+              <p class="desc">粘贴可疑 IP(每行一个,# 为注释,单次最多 200 个),调微步云端批量研判;仅判定恶意的进入规则。本面板不写平台数据库,也不改动现有推送规则;生成的 intel.yaml 下载后可到「推送规则 → 手动上传规则」送入网闸目录。ThreatBook 按次计费,请收敛后再查。</p>
+              <div class="status" id="tb_key_status"></div>
+              <label style="margin-top:10px">可疑 IP 列表
+                <textarea id="tb_ips" rows="8" placeholder="1.2.3.4&#10;5.6.7.8&#10;# 注释行会被忽略"></textarea>
+              </label>
+              <div class="actions">
+                <button class="btn" id="tb-query">开始研判</button>
+                <button class="ghost btn" id="tb-dl-yaml" disabled>下载 intel.yaml</button>
+                <button class="ghost btn" id="tb-dl-zip" disabled>下载 intel.zip</button>
+              </div>
+              <div class="status" id="tb_status"></div>
+              <div class="muted" id="tb_meta" style="margin:14px 0 8px"></div>
+              <div id="tb_table"></div>
             </div>
           </section>
 

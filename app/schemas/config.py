@@ -15,6 +15,7 @@ class ConfigPayload(BaseModel):
     ioc_rule_filename: str | None = None
     otx_api_key: str | None = None
     whoisxml_api_key: str | None = None
+    threatbook_api_key: str | None = None
     ta_node_top_per_source: int | None = Field(default=None, ge=0)
     ta_node_min_severity: str | None = None
     whoisxml_enrich_limit: int | None = Field(default=None, ge=0)

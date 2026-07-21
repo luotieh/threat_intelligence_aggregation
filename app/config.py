@@ -27,6 +27,7 @@ DEFAULTS: dict[str, str] = {
     "WHOISXML_API_KEY": "",
     "WHOISXML_ENRICH_LIMIT": "10",
     "WHOISXML_ENRICH_INTERVAL_SECONDS": "86400",
+    "THREATBOOK_API_KEY": "",
     "LLM_ENABLED": "false",
     "LLM_BASE_URL": "https://api.openai.com/v1",
     "LLM_API_KEY": "",
@@ -40,7 +41,7 @@ DEFAULTS: dict[str, str] = {
 }
 
 ENV_KEYS = set(DEFAULTS)
-SECRET_KEYS = {"MISP_API_KEY", "TA_NODE_TOKEN", "OTX_API_KEY", "WHOISXML_API_KEY", "LLM_API_KEY"}
+SECRET_KEYS = {"MISP_API_KEY", "TA_NODE_TOKEN", "OTX_API_KEY", "WHOISXML_API_KEY", "LLM_API_KEY", "THREATBOOK_API_KEY"}
 
 
 def parse_bool(value: str | bool | None) -> bool:
@@ -73,6 +74,7 @@ class Settings:
     whoisxml_api_key: str
     whoisxml_enrich_limit: int
     whoisxml_enrich_interval_seconds: int
+    threatbook_api_key: str
     llm_enabled: bool
     llm_base_url: str
     llm_api_key: str
@@ -117,6 +119,7 @@ def settings_from_values(db_values: dict[str, str] | None = None) -> Settings:
         whoisxml_api_key=value_for("WHOISXML_API_KEY", db_values),
         whoisxml_enrich_limit=int(value_for("WHOISXML_ENRICH_LIMIT", db_values)),
         whoisxml_enrich_interval_seconds=int(value_for("WHOISXML_ENRICH_INTERVAL_SECONDS", db_values)),
+        threatbook_api_key=value_for("THREATBOOK_API_KEY", db_values),
         llm_enabled=parse_bool(value_for("LLM_ENABLED", db_values)),
         llm_base_url=value_for("LLM_BASE_URL", db_values).rstrip("/"),
         llm_api_key=value_for("LLM_API_KEY", db_values),

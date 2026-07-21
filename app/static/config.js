@@ -8,7 +8,7 @@ const fmtTime = (iso) => {
 
 const fields = [
   "ta_node_enabled", "ta_node_source_name", "ta_node_push_interval_seconds",
-  "ioc_output_dir", "ioc_rule_filename", "otx_api_key", "whoisxml_api_key",
+  "ioc_output_dir", "ioc_rule_filename", "otx_api_key", "whoisxml_api_key", "threatbook_api_key",
   "ta_node_top_per_source", "ta_node_min_severity",
   "llm_enabled", "llm_base_url", "llm_api_key", "llm_model",
   "pipeline_target", "pipeline_max_enrich",
@@ -78,6 +78,7 @@ const titles = {
   pipeline: ["每日流水线", "自动化编排 · 每日 23:00"],
   push: ["推送规则", "ta_node 规则生成与上传"],
   intel: ["情报列表", "精选高危流量情报"],
+  threatbook: ["微步研判", "可疑 IP ThreatBook 查询与规则生成"],
 };
 document.querySelectorAll(".nav-item").forEach((b) => {
   b.onclick = () => {
@@ -90,6 +91,7 @@ document.querySelectorAll(".nav-item").forEach((b) => {
     $("page-sub").textContent = titles[p][1];
     if (p === "overview") loadOverview();
     if (p === "intel") loadTop();
+    if (p === "threatbook") tbStatus();
   };
 });
 
@@ -306,6 +308,68 @@ $("run-log").onclick = async () => {
     show(runs);
   } catch (e) { setStatus("run_log_line", "读取失败", "err"); runLogOut(""); toast(e, "err"); show(e); }
 };
+
+// ---- 微步研判 ----
+// 独立流程:不调平台数据库,研判结果仅存在本页内存(tbResults)供生成下载,不进推送链路
+let tbResults = [];
+async function tbStatus() {
+  try {
+    const r = await api("/threatbook/status");
+    setStatus("tb_key_status", r.configured ? "✓ ThreatBook API Key 已配置" : "✗ 未配置 ThreatBook API Key —— 请到「情报源」页填写并保存", r.configured ? "ok" : "err");
+  } catch (e) { setStatus("tb_key_status", "状态获取失败", "err"); }
+}
+function tbSevBadge(r) {
+  if (r.error) return '<span class="badge warn"><span class="dot"></span>查询失败</span>';
+  return r.is_malicious
+    ? '<span class="badge bad"><span class="dot"></span>恶意</span>'
+    : '<span class="badge ok"><span class="dot"></span>非恶意</span>';
+}
+function renderTb(resp) {
+  const rows = resp.results.map((r) => {
+    if (r.error) return `<tr><td class="mono">${esc(r.ip)}</td><td>${tbSevBadge(r)}</td><td colspan="6">${esc(r.error)}</td></tr>`;
+    return `<tr><td class="mono">${esc(r.ip)}</td><td>${tbSevBadge(r)}</td>` +
+      `<td>${esc((r.judgments || []).join(", ") || "—")}</td>` +
+      `<td><span class="sev ${esc(r.severity)}">${esc(r.severity)}</span> <span class="muted">${esc(r.severity_raw || "")}</span></td>` +
+      `<td>${esc(r.confidence_level || "—")}</td><td>${esc(r.category)}</td><td>${esc(r.recommended_action)}</td>` +
+      `<td><a href="${esc(r.permalink)}" target="_blank" rel="noopener">详情</a></td></tr>`;
+  });
+  const skip = (resp.skipped_input || []).length ? ` · 跳过非法行 ${resp.skipped_input.length}` : "";
+  $("tb_meta").textContent = `共 ${resp.total} 个 · 恶意 ${resp.malicious} · 非恶意 ${resp.benign} · 失败 ${resp.errors}${skip}`;
+  $("tb_table").innerHTML = rows.length
+    ? `<div class="table-wrap"><table><thead><tr><th>IP</th><th>判定</th><th>威胁类型</th><th>危险度</th><th>可信度</th><th>category</th><th>建议动作</th><th>微步详情</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`
+    : "";
+}
+$("tb-query").onclick = async () => {
+  const text = $("tb_ips").value;
+  setStatus("tb_status", "研判中(调用 ThreatBook,按次计费)…");
+  $("tb-dl-yaml").disabled = $("tb-dl-zip").disabled = true;
+  tbResults = [];
+  try {
+    const r = await api("/threatbook/query", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ips_text: text }) });
+    tbResults = r.results || [];
+    renderTb(r);
+    const m = `研判完成:恶意 ${r.malicious},非恶意 ${r.benign},失败 ${r.errors}` + (r.failed_batches ? `(${r.failed_batches} 个批次失败)` : "");
+    setStatus("tb_status", m, r.errors ? "err" : "ok");
+    toast(m, r.errors ? "err" : "ok");
+    $("tb-dl-yaml").disabled = $("tb-dl-zip").disabled = !(r.malicious > 0);
+    show(r);
+  } catch (e) { setStatus("tb_status", "✗ 研判失败", "err"); toast(e, "err"); show(e); }
+};
+async function tbDownload(fmt) {
+  try {
+    const response = await fetch(`/threatbook/generate?fmt=${fmt}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ results: tbResults }) });
+    if (!response.ok) throw await response.json().catch(() => response.statusText);
+    const blob = await response.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = fmt === "zip" ? "intel.zip" : "intel.yaml";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast(`已下载 intel.${fmt}(仅含恶意项,可到「推送规则」页上传进网闸目录)`, "ok");
+  } catch (e) { toast(e, "err"); show(e); }
+}
+$("tb-dl-yaml").onclick = () => tbDownload("yaml");
+$("tb-dl-zip").onclick = () => tbDownload("zip");
 
 // 初始化
 loadConfig().then(loadOverview).catch((e) => toast(e, "err"));
