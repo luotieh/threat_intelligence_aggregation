@@ -59,16 +59,16 @@ def parse_ips(lines: Iterable[str]) -> tuple[list[str], list[str]]:
 
 
 def query_ip_info(api_key: str, ips: list[str]) -> dict:
-    """调 /v3/ip/query 逐个查询 IP 威胁情报,返回 {ip: hit} 的研判结果 map。
+    """调 /v3/scene/ip_reputation 逐个查询 IP 威胁情报,返回 {ip: hit} 的研判结果 map。
 
-    ip/query 是 ThreatBook 基础威胁情报 IP 查询接口,按次计费。
-    每个 IP 独立请求,单次返回该 IP 的 judgments/severity/tags_classes 等完整情报。
+    使用 scene/ip_reputation 接口(apikey + resource 放在 query 参数),
+    单次返回该 IP 的 judgments/severity/tags_classes 等完整情报。按次计费。
     """
     results = {}
     for ip in ips:
         try:
             resp = requests.post(
-                f"{TB_API}/ip/query",
+                f"{TB_API}/scene/ip_reputation",
                 params={"apikey": api_key, "resource": ip},
                 json={"lang": "zh"},
                 timeout=30,
@@ -78,16 +78,8 @@ def query_ip_info(api_key: str, ips: list[str]) -> dict:
             if data.get("response_code") != 0:
                 results[ip] = {"_error": f"ThreatBook({data.get('response_code')}): {data.get('verbose_msg', '')}"}
                 continue
-            # ip/query 的 data 可能是: {"ip": {info}} / {info} / 嵌套在 ips 下
             raw = data.get("data") or {}
-            hit = {}
-            if isinstance(raw, dict):
-                if ip in raw and isinstance(raw[ip], dict):
-                    hit = raw[ip]
-                elif "ips" in raw and isinstance(raw["ips"], dict) and ip in raw["ips"]:
-                    hit = raw["ips"][ip]
-                elif any(k in raw for k in ("is_malicious", "judgments", "severity")):
-                    hit = raw
+            hit = raw.get(ip) if isinstance(raw, dict) and isinstance(raw.get(ip), dict) else {}
             results[ip] = hit
         except Exception as exc:
             results[ip] = {"_error": str(exc)}
