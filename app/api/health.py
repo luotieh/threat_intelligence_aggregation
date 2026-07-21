@@ -83,15 +83,24 @@ def health_threatbook(db: Session = Depends(get_db)):
         with httpx.Client(timeout=15, proxy=_outbound_proxy()) as client:
             response = client.post(
                 "https://api.threatbook.cn/v3/scene/dns",
-                json={"apikey": s.threatbook_api_key, "ips": ["1.1.1.1"], "lang": "zh"},
+                json={"apikey": s.threatbook_api_key, "ips": ["8.8.8.8"], "lang": "zh"},
             )
             response.raise_for_status()
             data = response.json()
-            if data.get("response_code") != 0:
-                return {"status": "failed", "error": f"ThreatBook: {data.get('verbose_msg', '未知错误')}"}
+            code = data.get("response_code")
+            if code != 0:
+                msg = data.get("verbose_msg") or "未知错误"
+                return {"status": "failed", "error": f"ThreatBook({code}): {msg}"}
         return {"status": "ok"}
+    except httpx.HTTPStatusError as exc:
+        body = ""
+        try:
+            body = exc.response.text[:500]
+        except Exception:
+            pass
+        return {"status": "failed", "error": f"HTTP {exc.response.status_code}: {body}"}
     except Exception as exc:
-        return {"status": "failed", "error": str(exc)}
+        return {"status": "failed", "error": f"{type(exc).__name__}: {exc}"}
 
 
 @router.get("/health/llm")
