@@ -107,18 +107,14 @@ def threatbook_query(payload: QueryRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/threatbook/generate")
-def threatbook_generate(payload: GenerateRequest, fmt: str = "yaml", save_to_gate: bool = False, db: Session = Depends(get_db)):
-    """把研判结果中判定恶意的 IP 生成 intel.yaml / intel.zip 下载。
-
-    若 save_to_gate=true,同时写入 IOC_OUTPUT_DIR 网闸目录。
-    """
+def threatbook_generate(payload: GenerateRequest, fmt: str = "yaml", db: Session = Depends(get_db)):
+    """把研判结果中判定恶意的 IP 生成 intel.yaml / intel.zip 下载。"""
     s = get_effective_settings(db)
     items = []
     for r in payload.results:
         hit = r.get("hit")
         if r.get("is_malicious") and isinstance(hit, dict) and r.get("ip"):
             items.append(summarize(r["ip"], hit))
-    # LLM 描述:已启用且密钥已配置时为每条生成自然语言告警
     for item in items:
         if s.llm_enabled and s.llm_api_key:
             try:
@@ -129,14 +125,6 @@ def threatbook_generate(payload: GenerateRequest, fmt: str = "yaml", save_to_gat
             except Exception:
                 pass
     yaml_text = build_intel_yaml(items)
-    if save_to_gate and items:
-        out_dir = Path(s.ioc_output_dir)
-        out_dir.mkdir(parents=True, exist_ok=True)
-        base = Path(s.ioc_rule_filename)
-        yaml_path = out_dir / base.with_suffix(".yaml").name
-        zip_path = out_dir / base.with_suffix(".zip").name
-        yaml_path.write_text(yaml_text, encoding="utf-8")
-        zip_path.write_bytes(build_intel_zip(yaml_text, arcname=base.with_suffix(".yaml").name))
     if fmt == "zip":
         return Response(
             content=build_intel_zip(yaml_text),
@@ -148,6 +136,43 @@ def threatbook_generate(payload: GenerateRequest, fmt: str = "yaml", save_to_gat
         media_type="text/yaml; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="intel.yaml"'},
     )
+
+
+class SaveToGateRequest(BaseModel):
+    results: list[dict]
+    selected_ips: list[str]
+
+
+@router.post("/threatbook/save-to-gate")
+def save_to_gate(payload: SaveToGateRequest, db: Session = Depends(get_db)):
+    """把研判结果中用户勾选的恶意 IP 生成规则,写入网闸目录。"""
+    s = get_effective_settings(db)
+    selected = set(payload.selected_ips)
+    items = []
+    for r in payload.results:
+        ip = r.get("ip")
+        hit = r.get("hit")
+        if ip in selected and r.get("is_malicious") and isinstance(hit, dict):
+            items.append(summarize(ip, hit))
+    for item in items:
+        if s.llm_enabled and s.llm_api_key:
+            try:
+                text = build_narrative(db, item["evidence"], item["value"])
+                if text and len(text) >= 20:
+                    item["description"] = text
+                    item["evidence"]["narrative"] = text
+            except Exception:
+                pass
+    yaml_text = build_intel_yaml(items)
+    if items:
+        out_dir = Path(s.ioc_output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        base = Path(s.ioc_rule_filename)
+        yaml_path = out_dir / base.with_suffix(".yaml").name
+        zip_path = out_dir / base.with_suffix(".zip").name
+        yaml_path.write_text(yaml_text, encoding="utf-8")
+        zip_path.write_bytes(build_intel_zip(yaml_text, arcname=base.with_suffix(".yaml").name))
+    return {"status": "ok", "saved": len(items), "ips": [i["value"] for i in items]}
 
 
 class ManualAddRequest(BaseModel):

@@ -338,8 +338,9 @@ function tbSevBadge(r) {
 }
 function renderTb(resp) {
   const rows = resp.results.map((r) => {
-    if (r.error) return `<tr><td class="mono">${esc(r.ip)}</td><td>${tbSevBadge(r)}</td><td colspan="6">${esc(r.error)}</td></tr>`;
-    return `<tr><td class="mono">${esc(r.ip)}</td><td>${tbSevBadge(r)}</td>` +
+    if (r.error) return `<tr><td></td><td class="mono">${esc(r.ip)}</td><td>${tbSevBadge(r)}</td><td colspan="6">${esc(r.error)}</td></tr>`;
+    const chk = r.is_malicious ? `<input type="checkbox" class="tb-chk" data-ip="${esc(r.ip)}">` : "";
+    return `<tr><td>${chk}</td><td class="mono">${esc(r.ip)}</td><td>${tbSevBadge(r)}</td>` +
       `<td>${esc((r.judgments || []).join(", ") || "—")}</td>` +
       `<td><span class="sev ${esc(r.severity)}">${esc(r.severity)}</span> <span class="muted">${esc(r.severity_raw || "")}</span></td>` +
       `<td>${esc(r.confidence_level || "—")}</td><td>${esc(r.category)}</td><td>${esc(r.recommended_action)}</td>` +
@@ -348,7 +349,7 @@ function renderTb(resp) {
   const skip = (resp.skipped_input || []).length ? ` · 跳过非法行 ${resp.skipped_input.length}` : "";
   $("tb_meta").textContent = `共 ${resp.total} 个 · 恶意 ${resp.malicious} · 非恶意 ${resp.benign} · 失败 ${resp.errors}${skip}`;
   $("tb_table").innerHTML = rows.length
-    ? `<div class="table-wrap"><table><thead><tr><th>IP</th><th>判定</th><th>威胁类型</th><th>危险度</th><th>可信度</th><th>category</th><th>建议动作</th><th>微步详情</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`
+    ? `<div class="table-wrap"><table><thead><tr><th></th><th>IP</th><th>判定</th><th>威胁类型</th><th>危险度</th><th>可信度</th><th>category</th><th>建议动作</th><th>微步详情</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`
     : "";
 }
 $("tb-query").onclick = async () => {
@@ -365,13 +366,13 @@ $("tb-query").onclick = async () => {
     setStatus("tb_status", m, r.errors ? "err" : "ok");
     toast(m, r.errors ? "err" : "ok");
     $("tb-dl-yaml").disabled = $("tb-dl-zip").disabled = !(r.malicious > 0);
+    $("tb-save-gate").disabled = !(r.malicious > 0);
     show(r);
   } catch (e) { setStatus("tb_status", "✗ 研判失败", "err"); toast(e, "err"); show(e); }
 };
 async function tbDownload(fmt) {
   try {
-    const save = $("tb_save_gate").checked;
-    const response = await fetch(`/threatbook/generate?fmt=${fmt}&save_to_gate=${save}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ results: tbResults }) });
+    const response = await fetch(`/threatbook/generate?fmt=${fmt}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ results: tbResults }) });
     if (!response.ok) throw await response.json().catch(() => response.statusText);
     const blob = await response.blob();
     const a = document.createElement("a");
@@ -379,10 +380,22 @@ async function tbDownload(fmt) {
     a.download = fmt === "zip" ? "intel.zip" : "intel.yaml";
     a.click();
     URL.revokeObjectURL(a.href);
-    const extra = save ? " · 已落盘网闸目录" : "";
-    toast(`已下载 intel.${fmt}(仅含恶意项)${extra}`, "ok");
+    toast(`已下载 intel.${fmt}(仅含恶意项)`, "ok");
   } catch (e) { toast(e, "err"); show(e); }
 }
+
+// 勾选落盘到网闸
+$("tb-save-gate").onclick = async () => {
+  const checked = Array.from(document.querySelectorAll(".tb-chk:checked")).map(cb => cb.dataset.ip);
+  if (!checked.length) { toast("请勾选要落盘的恶意 IP", "err"); return; }
+  setStatus("tb_status", "落盘中…");
+  try {
+    const r = await api("/threatbook/save-to-gate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ results: tbResults, selected_ips: checked }) });
+    setStatus("tb_status", `✓ 已落盘 ${r.saved} 条规则到网闸目录`, "ok");
+    toast(`落盘 ${r.saved} 条: ${r.ips.join(", ")}`, "ok");
+    show(r);
+  } catch (e) { setStatus("tb_status", "✗ 落盘失败", "err"); toast(e, "err"); show(e); }
+};
 $("tb-dl-yaml").onclick = () => tbDownload("yaml");
 $("tb-dl-zip").onclick = () => tbDownload("zip");
 
