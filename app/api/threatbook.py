@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.services.config_service import get_effective_settings
+from app.services.llm import build_narrative
 from app.services.threatbook import (
     BATCH_SIZE,
     MAX_IPS_PER_RUN,
@@ -101,6 +102,16 @@ def threatbook_generate(payload: GenerateRequest, fmt: str = "yaml", db: Session
         hit = r.get("hit")
         if r.get("is_malicious") and isinstance(hit, dict) and r.get("ip"):
             items.append(summarize(r["ip"], hit))
+    # LLM 描述:已启用且密钥已配置时为每条生成自然语言告警
+    for item in items:
+        if s.llm_enabled and s.llm_api_key:
+            try:
+                text = build_narrative(db, item["evidence"], item["value"])
+                if text and len(text) >= 20:
+                    item["description"] = text
+                    item["evidence"]["narrative"] = text
+            except Exception:
+                pass
     yaml_text = build_intel_yaml(items)
     if items:
         out_dir = Path(s.ioc_output_dir)
@@ -150,6 +161,14 @@ def manual_add(payload: ManualAddRequest, db: Session = Depends(get_db)):
     if payload.description:
         item["description"] = payload.description
         item["evidence"]["narrative"] = payload.description
+    elif s.llm_enabled and s.llm_api_key:
+        try:
+            text = build_narrative(db, item["evidence"], item["value"])
+            if text and len(text) >= 20:
+                item["description"] = text
+                item["evidence"]["narrative"] = text
+        except Exception:
+            pass
 
     yaml_text = build_intel_yaml([item])
     out_dir = Path(s.ioc_output_dir)
