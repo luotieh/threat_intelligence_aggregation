@@ -171,7 +171,6 @@ def generate_ta_node_ioc_package(db: Session, mode: str = "incremental", batch_s
         items.append(item)
 
     rule_path = _safe_rule_path(Path(s.ioc_output_dir), s.ioc_rule_filename)
-    zip_path = rule_path.with_suffix(".zip")
     try:
         write_ta_node_ioc_files(rule_path, items)
     except Exception as exc:
@@ -195,7 +194,6 @@ def generate_ta_node_ioc_package(db: Session, mode: str = "incremental", batch_s
         "status": "success",
         "count": len(items),
         "rule_file": str(rule_path),
-        "zip_file": str(zip_path),
         "format": "ta_node intel.yaml",
     }
 
@@ -204,9 +202,6 @@ def write_ta_node_ioc_files(rule_path: Path, items: list[dict]) -> None:
     rule_path.parent.mkdir(parents=True, exist_ok=True)
     data = yaml.safe_dump({"items": items}, sort_keys=False, allow_unicode=True)
     rule_path.write_text(data, encoding="utf-8")
-    zip_path = rule_path.with_suffix(".zip")
-    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.write(rule_path, arcname=rule_path.name)
 
 
 def _count_items(data: bytes | str) -> int:
@@ -298,11 +293,7 @@ def save_uploaded_ioc_rule(output_dir: str, filename: str, content: bytes) -> di
     if rule_path.suffix.lower() in {".yaml", ".yml"}:
         validate_ta_node_yaml(content)
     rule_path.write_bytes(content)
-    zip_path = rule_path if rule_path.suffix.lower() == ".zip" else rule_path.with_suffix(".zip")
-    if rule_path.suffix.lower() != ".zip":
-        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            archive.write(rule_path, arcname=rule_path.name)
-    return {"status": "saved", "rule_file": str(rule_path), "zip_file": str(zip_path)}
+    return {"status": "saved", "rule_file": str(rule_path)}
 
 
 def validate_ta_node_yaml(content: bytes) -> None:

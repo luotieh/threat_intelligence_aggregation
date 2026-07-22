@@ -415,7 +415,7 @@ $("man-add").onclick = async () => {
       description: $("man_desc").value.trim(),
     };
     const r = await api("/threatbook/manual-add", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    setStatus("man_status", `✓ ${r.ip} ${r.category}/${r.severity} 已写入 ${r.zip}`, "ok");
+    setStatus("man_status", `✓ ${r.ip} ${r.category}/${r.severity} 已写入 ${r.yaml}`, "ok");
     toast(`已添加 ${r.ip} → 网闸目录`, "ok");
     loadTbLogs();
     show(r);

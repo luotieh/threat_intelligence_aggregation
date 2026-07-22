@@ -183,9 +183,7 @@ def save_to_gate(payload: SaveToGateRequest, db: Session = Depends(get_db)):
         out_dir.mkdir(parents=True, exist_ok=True)
         base = Path(s.ioc_rule_filename)
         yaml_path = out_dir / base.with_suffix(".yaml").name
-        zip_path = out_dir / base.with_suffix(".zip").name
         yaml_path.write_text(yaml_text, encoding="utf-8")
-        zip_path.write_bytes(build_intel_zip(yaml_text, arcname=base.with_suffix(".yaml").name))
     return {"status": "ok", "saved": len(items), "ips": [i["value"] for i in items]}
 
 
@@ -230,16 +228,13 @@ def manual_add(payload: ManualAddRequest, db: Session = Depends(get_db)):
     out_dir.mkdir(parents=True, exist_ok=True)
     base = Path(s.ioc_rule_filename)
     yaml_path = out_dir / base.with_suffix(".yaml").name
-    zip_path = out_dir / base.with_suffix(".zip").name
     yaml_path.write_text(yaml_text, encoding="utf-8")
-    zip_path.write_bytes(build_intel_zip(yaml_text, arcname=base.with_suffix(".yaml").name))
     resp = {
         "status": "ok",
         "ip": payload.ip,
         "category": item["category"],
         "severity": item["severity"],
         "yaml": str(yaml_path),
-        "zip": str(zip_path),
     }
     _audit_log(db, {"type": "manual", "ip": payload.ip, "category": payload.category, "severity": payload.severity, "judgments": payload.judgments})
     return resp
