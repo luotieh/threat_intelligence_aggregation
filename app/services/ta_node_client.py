@@ -170,6 +170,10 @@ def generate_ta_node_ioc_package(db: Session, mode: str = "incremental", batch_s
         item["updated_at"] = int(now.timestamp())
         items.append(item)
 
+    # 域名 IOC 解析为 IP,追加 IP 规则(内网无法解析域名时仍可匹配)
+    ip_items = _resolve_domain_items(items, now)
+    items.extend(ip_items)
+
     rule_path = _safe_rule_path(Path(s.ioc_output_dir), s.ioc_rule_filename)
     try:
         write_ta_node_ioc_files(rule_path, items)
@@ -196,6 +200,41 @@ def generate_ta_node_ioc_package(db: Session, mode: str = "incremental", batch_s
         "rule_file": str(rule_path),
         "format": "ta_node intel.yaml",
     }
+
+
+def _resolve_domain_items(items: list[dict], now: datetime) -> list[dict]:
+    """对 domain 类型的 IOC 做 DNS 解析,为每个解析出的 IP 生成对应的 rule item。"""
+    import hashlib
+    import socket
+    resolved = []
+    for item in items:
+        if item.get("type") != "domain":
+            continue
+        domain = item.get("value", "")
+        if not domain:
+            continue
+        try:
+            addrs = socket.getaddrinfo(domain, None, socket.AF_INET)
+        except socket.gaierror:
+            continue
+        seen = set()
+        for addr in addrs:
+            ip = addr[4][0]
+            if ip in seen:
+                continue
+            seen.add(ip)
+            ip_item = {
+                **item,
+                "id": hashlib.sha256(f"dns:{domain}->{ip}".encode()).hexdigest(),
+                "type": "ip",
+                "value": ip,
+                "description": f"[DNS解析自 {domain}] {item.get('description', '')}",
+                "tags": list(item.get("tags") or []) + [f"dns_resolved_from:{domain}"],
+                "created_at": int(now.timestamp()),
+                "updated_at": int(now.timestamp()),
+            }
+            resolved.append(ip_item)
+    return resolved
 
 
 def write_ta_node_ioc_files(rule_path: Path, items: list[dict]) -> None:
