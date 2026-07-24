@@ -23,7 +23,6 @@ def _indicator(value="evil.com", ntype="domain", raw=None):
 def test_collect_file_facts_records_size_and_hash(tmp_path):
     rule = tmp_path / "intel.yaml"
     rule.write_bytes(b"items: []\n")
-    (tmp_path / "intel.zip").write_bytes(b"PK-fake")
 
     facts = collect_file_facts(rule, count=10)
 
@@ -31,19 +30,6 @@ def test_collect_file_facts_records_size_and_hash(tmp_path):
     assert facts["yaml"]["count"] == 10
     assert facts["yaml"]["size"] == len(b"items: []\n")
     assert facts["yaml"]["sha256"] == hashlib.sha256(b"items: []\n").hexdigest()
-    assert facts["zip"]["exists"] is True
-    assert facts["zip"]["sha256"] == hashlib.sha256(b"PK-fake").hexdigest()
-
-
-def test_collect_file_facts_missing_zip_does_not_raise(tmp_path):
-    rule = tmp_path / "intel.yaml"
-    rule.write_bytes(b"items: []\n")
-
-    facts = collect_file_facts(rule, count=1)
-
-    assert facts["yaml"]["exists"] is True
-    assert facts["zip"]["exists"] is False
-    assert "sha256" not in facts["zip"]
 
 
 def test_rule_manifest_marks_narrated_and_confirmed():

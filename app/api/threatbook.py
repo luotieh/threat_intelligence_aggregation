@@ -14,7 +14,6 @@ from app.services.threatbook import (
     BATCH_SIZE,
     MAX_IPS_PER_RUN,
     build_intel_yaml,
-    build_intel_zip,
     gang_tags_of,
     map_hit,
     parse_ips,
@@ -121,8 +120,8 @@ def threatbook_query(payload: QueryRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/threatbook/generate")
-def threatbook_generate(payload: GenerateRequest, fmt: str = "yaml", db: Session = Depends(get_db)):
-    """把研判结果中判定恶意的 IP 生成 intel.yaml / intel.zip 下载。"""
+def threatbook_generate(payload: GenerateRequest, db: Session = Depends(get_db)):
+    """把研判结果中判定恶意的 IP 生成 intel.yaml 下载。"""
     s = get_effective_settings(db)
     items = []
     for r in payload.results:
@@ -139,12 +138,6 @@ def threatbook_generate(payload: GenerateRequest, fmt: str = "yaml", db: Session
             except Exception:
                 pass
     yaml_text = build_intel_yaml(items)
-    if fmt == "zip":
-        return Response(
-            content=build_intel_zip(yaml_text),
-            media_type="application/zip",
-            headers={"Content-Disposition": 'attachment; filename="intel.zip"'},
-        )
     return Response(
         content=yaml_text,
         media_type="text/yaml; charset=utf-8",

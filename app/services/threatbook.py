@@ -9,9 +9,7 @@ Web(app.api.threatbook)与 CLI(scripts/threatbook_to_intel.py)共用本模块;
 from __future__ import annotations
 
 import hashlib
-import io
 import ipaddress
-import zipfile
 from datetime import datetime, timezone
 from typing import Iterable
 
@@ -160,9 +158,3 @@ def build_intel_yaml(items: list[dict]) -> str:
     """与 ta_node_client.write_ta_node_ioc_files 同款的顶层 {"items": [...]} 结构。"""
     return yaml.safe_dump({"items": items}, sort_keys=False, allow_unicode=True)
 
-
-def build_intel_zip(yaml_text: str, arcname: str = "intel.yaml") -> bytes:
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(arcname, yaml_text)
-    return buf.getvalue()

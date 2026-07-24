@@ -8,7 +8,6 @@ import yaml
 
 from app.services.threatbook import (
     build_intel_yaml,
-    build_intel_zip,
     map_hit,
     parse_ips,
     summarize,
@@ -70,15 +69,6 @@ def test_summarize_item_passes_platform_validator():
     assert c2["category"] == "c2" and c2["severity"] == "high" and c2["enabled"] is True
     assert "source:threatbook" in c2["tags"]
     assert c2["evidence"]["permalink"].endswith("/203.0.113.10")
-
-
-def test_build_intel_zip_contains_yaml():
-    data = build_intel_zip(build_intel_yaml([summarize("203.0.113.10", MALICIOUS_C2)]))
-    import io
-    import zipfile
-    with zipfile.ZipFile(io.BytesIO(data)) as archive:
-        assert archive.namelist() == ["intel.yaml"]
-        validate_ta_node_yaml(archive.read("intel.yaml"))
 
 
 # ---- API 端点 ----

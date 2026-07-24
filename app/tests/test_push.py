@@ -1,4 +1,3 @@
-import zipfile
 from pathlib import Path
 
 import pytest
@@ -25,7 +24,7 @@ def test_push_disabled_skips(db, make_indicator, tmp_path):
     assert push_traffic_to_ta_node(db)["status"] == "skipped"
 
 
-def test_generate_writes_ta_node_yaml_and_same_name_zip(db, make_indicator, tmp_path):
+def test_generate_writes_ta_node_yaml(db, make_indicator, tmp_path):
     output_cfg(db, tmp_path)
     db.add(make_indicator())
     db.commit()
@@ -33,13 +32,10 @@ def test_generate_writes_ta_node_yaml_and_same_name_zip(db, make_indicator, tmp_
     assert result["status"] == "success"
 
     rule_path = Path(result["rule_file"])
-    zip_path = Path(result["zip_file"])
     data = yaml.safe_load(rule_path.read_text())
     assert data["items"][0]["value"] == "evil.example.com"
     assert data["items"][0]["source"] == "Threat Intel Hub"
     assert {"id", "type", "value", "category", "severity", "source", "enabled"} <= set(data["items"][0])
-    with zipfile.ZipFile(zip_path) as archive:
-        assert archive.namelist() == ["intel.yaml"]
 
 
 def test_generate_uses_custom_source_name(db, make_indicator, tmp_path):
@@ -89,7 +85,7 @@ def test_incremental_push_includes_unpushed_only(db, make_indicator, tmp_path):
     assert data["items"][0]["value"] == "b"
 
 
-def test_upload_yaml_validates_and_creates_same_name_zip(tmp_path):
+def test_upload_yaml_validates_and_saves(tmp_path):
     content = b"""
 items:
   - id: ioc-1
@@ -102,8 +98,6 @@ items:
 """
     result = save_uploaded_ioc_rule(str(tmp_path), "intel.yaml", content)
     assert Path(result["rule_file"]).exists()
-    with zipfile.ZipFile(result["zip_file"]) as archive:
-        assert archive.namelist() == ["intel.yaml"]
 
 
 def test_upload_yaml_rejects_invalid_ta_node_format(tmp_path):
@@ -137,61 +131,28 @@ def test_top_per_source_zero_keeps_full_behavior(db, make_indicator, tmp_path):
 
 
 # ---- 磁盘规则文件检查(网闸取走探测)----
-def _write_rule_files(tmp_path, count=3, make_zip=True):
-    import zipfile as _zip
+def _write_rule_files(tmp_path, count=3):
     items = [{"id": f"i{n}", "type": "domain", "value": f"e{n}.com",
               "category": "c2", "severity": "high", "source": "Threat Intel Hub",
               "enabled": True} for n in range(count)]
     yaml_path = tmp_path / "intel.yaml"
     yaml_path.write_text(yaml.safe_dump({"items": items}, allow_unicode=True), encoding="utf-8")
-    if make_zip:
-        with _zip.ZipFile(tmp_path / "intel.zip", "w") as z:
-            z.write(yaml_path, arcname="intel.yaml")
     return yaml_path
 
 
-def test_inspect_both_present_not_taken(tmp_path):
+def test_inspect_yaml_present(tmp_path):
     from app.services.ta_node_client import inspect_rule_files
     _write_rule_files(tmp_path, count=5)
     r = inspect_rule_files(str(tmp_path), "intel.yaml")
     assert r["yaml"]["exists"] is True and r["yaml"]["count"] == 5
-    assert r["zip"]["exists"] is True and r["zip"]["count"] == 5
-    assert r["consistent"] is True
     assert r["taken_by_gate"] is False
 
 
-def test_inspect_zip_taken_by_gate(tmp_path):
-    from app.services.ta_node_client import inspect_rule_files
-    _write_rule_files(tmp_path, count=4)
-    (tmp_path / "intel.zip").unlink()   # 网闸取走 zip
-    r = inspect_rule_files(str(tmp_path), "intel.yaml")
-    assert r["yaml"]["exists"] is True and r["yaml"]["count"] == 4
-    assert r["zip"]["exists"] is False and r["zip"]["count"] is None
-    assert r["taken_by_gate"] is True
-    assert "网闸" in r["verdict"]
-
-
-def test_inspect_both_missing(tmp_path):
+def test_inspect_yaml_missing(tmp_path):
     from app.services.ta_node_client import inspect_rule_files
     r = inspect_rule_files(str(tmp_path), "intel.yaml")
     assert r["yaml"]["exists"] is False
-    assert r["zip"]["exists"] is False
     assert r["taken_by_gate"] is False
-
-
-def test_inspect_count_mismatch_flagged(tmp_path):
-    from app.services.ta_node_client import inspect_rule_files
-    import zipfile as _zip
-    _write_rule_files(tmp_path, count=3)
-    # 用不同条数的 yaml 覆盖 zip 内容,制造不一致
-    stale = tmp_path / "stale.yaml"
-    stale.write_text(yaml.safe_dump({"items": [{"id": "x"}]}, allow_unicode=True), encoding="utf-8")
-    with _zip.ZipFile(tmp_path / "intel.zip", "w") as z:
-        z.write(stale, arcname="intel.yaml")
-    r = inspect_rule_files(str(tmp_path), "intel.yaml")
-    assert r["yaml"]["count"] == 3
-    assert r["zip"]["count"] == 1
-    assert r["consistent"] is False
 
 
 def test_inspect_bad_yaml_count_none(tmp_path):
@@ -210,11 +171,9 @@ def test_file_status_endpoint_reads_configured_dir(db, tmp_path):
     add_cfg(db, "IOC_RULE_FILENAME", "intel.yaml")
     db.commit()
     _write_rule_files(tmp_path, count=7)
-    (tmp_path / "intel.zip").unlink()   # 模拟网闸取走
     r = ioc_rules_file_status(db)
     assert r["output_dir"] == str(tmp_path)
     assert r["yaml"]["count"] == 7
-    assert r["taken_by_gate"] is True
 
 
 def test_generate_fills_llm_narrative_before_write(db, make_indicator, tmp_path, monkeypatch):

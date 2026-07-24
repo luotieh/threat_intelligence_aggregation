@@ -47,10 +47,10 @@ async def upload_ioc_rule(file: UploadFile = File(...), db: Session = Depends(ge
 
 @router.get("/ioc-rules/file-status")
 def ioc_rules_file_status(db: Session = Depends(get_db)):
-    """检查输出目录里 intel.yaml / intel.zip 的实际磁盘状态与条数。
+    """检查输出目录里 intel.yaml 的实际磁盘状态与条数。
 
     与 /push/ta-node/status(读数据库计数)不同,本接口直接扫磁盘,
-    可判断内网网闸是否已把 zip 取走。
+    可判断内网网闸是否已把文件取走。
     """
     s = get_effective_settings(db)
     return inspect_rule_files(s.ioc_output_dir, s.ioc_rule_filename)
@@ -58,7 +58,7 @@ def ioc_rules_file_status(db: Session = Depends(get_db)):
 
 @router.get("/pipeline/runs")
 def pipeline_runs(limit: int = 30, db: Session = Depends(get_db)):
-    """规则生成的运行日志(最新在前):富化、LLM 描述、写 yaml/zip 各步的实际结果。
+    """规则生成的运行日志(最新在前):富化、LLM 描述、写 yaml 各步的实际结果。
 
     由流水线写文件时当场落库,网闸随后取走文件也不影响追溯。
     """

@@ -27,9 +27,8 @@ def _file_facts(path: Path, count: int | None = None) -> dict:
 
 
 def collect_file_facts(rule_path: Path, count: int) -> dict:
-    """写完 yaml/zip 后当场取事实。此刻文件必然还在,不受网闸后续取走影响。"""
-    zip_path = rule_path.with_suffix(".zip")
-    return {"yaml": _file_facts(rule_path, count), "zip": _file_facts(zip_path, count)}
+    """写完 yaml 后当场取事实。此刻文件必然还在,不受网闸后续取走影响。"""
+    return {"yaml": _file_facts(rule_path, count)}
 
 
 def rule_manifest(indicators) -> list[dict]:
